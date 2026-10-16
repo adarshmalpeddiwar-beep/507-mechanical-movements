@@ -107,6 +107,7 @@ screwModel(109,{summary:'A screw-cutting train in miniature: the lead screw carr
    base:H=>[U.post(-56,0,H-20+3+4.5,U.BT)],pose:(th,x,H)=>({g1:U.at([-60,0,H],[-1,0,0],-th,[0,0,1]),g2:U.at([-60,0,H-20],[-1,0,0],th*16/24+PI/24,[0,0,1]),t:K.M4.mul(K.M4.T(x,0,H+10),K.M4.Rx(PI/2))})}});
 screwModel(110,{summary:'Traverse motion for winding thread onto spools: the guide nut runs one way along the screw and back the other, so the thread is laid evenly from end to end.',th:(g,sim)=>sim?sim.x/16*TAU:0});
 screwModel(111,{summary:'The differential (micrometer) screw: one rod has two threads of different pitch. It screws through the fixed nut with one and carries the moving nut with the other, so each turn moves the carriage by only the difference of the pitches: very fine and very strong.',k:0.15});
+screwModel(266,{summary:'Two screws of different pitch on one spindle: one works in the fixed frame, the other in the moving bearing, so each turn moves the bearing by only the difference of the pitches.',k:0.15});
 screwModel(285,{summary:'A screw moving the lathe spindle along: each turn advances it by the pitch.'});
 /* ---------- 104 screw and worm wheel ---------- */
 {const m=2,p=PI*m,rp=6,Zw=30,Rw=m*Zw/2,Hw=U.BT+12,Hc=Hw+rp+Rw,lam=Math.atan(p/(TAU*rp)),hw=8;
