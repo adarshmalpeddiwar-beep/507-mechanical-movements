@@ -129,5 +129,10 @@ function mount(host,n,title){const model=MODELS[n];if(!model)return null;
 function persp(f,a,n,fa){const t=1/Math.tan(f/2);return[t/a,0,0,0,0,t,0,0,0,0,(fa+n)/(n-fa),-1,0,0,2*fa*n/(n-fa),0];}
 function look(e,c,u){let z=[e[0]-c[0],e[1]-c[1],e[2]-c[2]];let l=Math.hypot(...z);z=z.map(v=>v/l);let x=[u[1]*z[2]-u[2]*z[1],u[2]*z[0]-u[0]*z[2],u[0]*z[1]-u[1]*z[0]];l=Math.hypot(...x);x=x.map(v=>v/l);const y=[z[1]*x[2]-z[2]*x[1],z[2]*x[0]-z[0]*x[2],z[0]*x[1]-z[1]*x[0]];
   return[x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-(x[0]*e[0]+x[1]*e[1]+x[2]*e[2]),-(y[0]*e[0]+y[1]*e[1]+y[2]*e[2]),-(z[0]*e[0]+z[1]*e[1]+z[2]*e[2]),1];}
-return{MODELS,mount,K,along};
+const loading={};
+function chunkOf(n){const I=window.CAD.INDEX||{};for(const k in I)if(I[k].indexOf(n)>=0)return k;return null;}
+function has(n){return !!MODELS[n]||!!chunkOf(n);}
+function load(n){if(MODELS[n])return Promise.resolve(true);const c=chunkOf(n);if(!c)return Promise.resolve(false);
+  return loading[c]||(loading[c]=new Promise((res,rej)=>{const s=document.createElement('script');s.src='js/cad/'+c+'.js';s.onload=()=>res(true);s.onerror=()=>{delete loading[c];rej(new Error('Could not load the 3D model'));};document.head.append(s);}));}
+return{MODELS,mount,K,along,has,load};
 })();

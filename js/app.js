@@ -76,7 +76,7 @@ function footer(){return `<footer><p>Descriptions are summarised in plain Englis
 /* ---------- detail bench ---------- */
 let bench=null,cadH=null,cadObs=null;
 function stopBench(){if(bench){bench.alive=false;bench=null;}if(cadObs){cadObs.disconnect();cadObs=null;}if(cadH){cadH.destroy();cadH=null;}}
-const hasCad=n=>!!(window.CAD&&window.CAD.MODELS[n]);
+const hasCad=n=>!!(window.CAD&&window.CAD.has(n));
 function detail(n){stopBench();const m=MV[n-1];if(!m){location.hash='';return;}const sim=SIMS[n];
   const prev=n>1?n-1:null,next=n<507?n+1:null;
   app.innerHTML=`
@@ -115,7 +115,7 @@ function detail(n){stopBench();const m=MV[n-1];if(!m){location.hash='';return;}c
   $('#cat').addEventListener('click',()=>{state.cat=m.c;store('cat',m.c);state.q='';store('q','');location.hash='';});
   window.scrollTo(0,0);
   if(sim)startBench(sim);
-  const cs=$('#cad');if(cs){cadObs=new IntersectionObserver(es=>{if(es.some(e=>e.isIntersecting)&&!cadH){cadH=window.CAD.mount(cs,n,m.t);cadObs.disconnect();}},{rootMargin:'300px'});cadObs.observe(cs);}
+  const cs=$('#cad');if(cs){cadObs=new IntersectionObserver(es=>{if(es.some(e=>e.isIntersecting)&&!cadH){cadObs.disconnect();cadH={destroy(){}};const tok=cadH;window.CAD.load(n).then(()=>{if(cadH!==tok)return;cadH=window.CAD.mount(cs,n,m.t)||tok;}).catch(e=>{cs.innerHTML='<p class="schem">'+esc(e.message)+'</p>';});}},{rootMargin:'300px'});cadObs.observe(cs);}
 }
 
 function startBench(sim){
