@@ -8,7 +8,7 @@ const C={};let ctx=null;let DIR=1;function speedSign(){return DIR;}
 """+kit+"\n"+new+"""
 const ALL=Object.assign({119:M119,120:M120,121:M121,122:M122,123:M123,124:M124,127:M127},SIMS_NEW);
 for(const k in ALL){const m=ALL[k];m.params=m.params||[];m.P={};m.params.forEach(p=>m.P[p.id]=p.value);if(!m.reset)m.reset=function(){};}
-window.MB={SIMS:ALL,C,setCtx(c){ctx=c;},setDir(d){DIR=d||1;},W,H,ropeThru,tanLine,cam3,circ3};
+window.MB={SIMS:ALL,C,setCtx(c){ctx=c;},setDir(d){DIR=d||1;},W,H,ropeThru,tanLine,cam3,circ3,pitchCurve,toothedCurve,ncPhase};
 })();
 """
 open('js/mechanisms.js','w').write(js)

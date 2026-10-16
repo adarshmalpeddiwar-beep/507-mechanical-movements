@@ -326,8 +326,8 @@ function bboxPts(pts,lo,hi){for(const p of pts){lo[0]=Math.min(lo[0],p[0]);lo[1]
 function build(n,spec,P){S=spec.S||0.3;const R=runner(spec.sim||n,spec.P);spec._R=R;
   const parts=[],caps=[];spec._parts={};
   for(const p of spec.parts){const t=(p.t||1)*(TH+GAP)-GAP,th=p.th||t;let mesh=p.mesh;
-    if(!mesh){mesh=ext(typeof p.shape==='function'?p.shape(Sh):p.shape,0,th);
-      for(const q of p.pins||[]){const top=zl(q[2])-zl(p.layer||0)+TH+GAP+CAPH;const [x,y]=mm(q);mesh=merge(mesh,cyl(PINR,th,top,28,x,y));caps.push({part:p.id,local:q,z:zl(q[2])+TH+GAP});}
+    if(!mesh)mesh=ext(typeof p.shape==='function'?p.shape(Sh):p.shape,0,th);
+    {for(const q of p.pins||[]){const top=zl(q[2])-zl(p.layer||0)+TH+GAP+CAPH;const [x,y]=mm(q);mesh=merge(mesh,cyl(PINR,th,top,28,x,y));caps.push({part:p.id,local:q,z:zl(q[2])+TH+GAP});}
       for(const b of p.bosses||[]){const [x,y]=mm(b);mesh=merge(mesh,cyl(b[3]||BOSSR,th,th+b[2],28,x,y));}}
     const q=Object.assign({},p,{mesh,role:p.role||'link'});delete q.shape;parts.push(q);spec._parts[p.id]=p;}
   /* base plate: from swept extents of every part */
@@ -371,7 +371,7 @@ const Mesh={
   cylZ(r,h,n=40){return cyl(r,0,h,n);}
 };
 function xfz(m,x,y,a){return K.xf(m,M4.mul(M4.Rz(a),M4.T(x,y,0)));}
-return{def,Sh,Mesh,zl,place,mm,get S(){return S;},TH,GAP,BT,PINR,BORER,CAPR,ext,runner,gearOutline};
+return{def,Sh,Mesh,zl,place,mm,get S(){return S;},_S(v){if(v!==undefined)S=v;return S;},TH,GAP,BT,PINR,BORER,CAPR,ext,runner,gearOutline};
 })();
 window.PK=PK;
 /* ===== 3D layouts: models whose simulation already works in 3D world coordinates (px, z up), e.g. belts between shafts at right angles.
@@ -406,6 +406,58 @@ PK.def3=function(n,spec){const MODELS=window.CAD.MODELS;const PI=Math.PI;const {
         else inst.push(['cap',M4.T(s.cap[0],s.cap[1],s.cap[2])]);}
       return{inst,belts:[{pts:geo.belt.map(W),r:1.6,closed:true,travel:phi*(geo.A?geo.A.r*S:0)}],read:spec.read?spec.read(phi):`driver ${Math.round(phi*180/PI)%360}°`};},
     get _belt(){return this._L;}};};
+/* ===== spatial kit: models whose parts move in 3D (bevels, worms, shafts in bearings). Everything in mm, z up, base top at z=BT.
+   Part meshes are modelled in print orientation (flat face down from z=0); pose() returns a 16-number matrix per part. ===== */
+K.loftS=function(secs){const m={t:[]},tri=(a,b,c)=>m.t.push(a[0],a[1],a[2],b[0],b[1],b[2],c[0],c[1],c[2]);const ar=p=>{let s=0;for(let i=0,n=p.length;i<n;i++){const a=p[i],b=p[(i+1)%n];s+=a[0]*b[1]-b[0]*a[1];}return s/2;};
+  const rev=ar(secs[0].o)<0,O=secs.map(s=>rev?s.o.slice().reverse():s.o);
+  const H=(secs[0].h||[]).map((h0,j)=>{const r=ar(h0)>0;return secs.map(s=>r?s.h[j].slice().reverse():s.h[j]);});
+  const key=p=>p[0].toFixed(5)+','+p[1].toFixed(5);
+  const cap=(oo,hh,top)=>{const map=new Map();for(const p of oo)map.set(key(p),p);for(const h of hh)for(const p of h)map.set(key(p),p);const T=K.triangulate(oo.map(p=>[p[0],p[1]]),hh.map(h=>h.map(p=>[p[0],p[1]])));
+    for(const [a,b,c] of T.tris){const P=[T.pts[a],T.pts[b],T.pts[c]].map(q=>map.get(key(q)));if(P.some(x=>!x))continue;if(top)tri(P[0],P[1],P[2]);else tri(P[0],P[2],P[1]);}};
+  const N=secs.length;cap(O[0],H.map(h=>h[0]),false);cap(O[N-1],H.map(h=>h[N-1]),true);
+  for(const L of [O,...H])for(let k=0;k<N-1;k++){const A=L[k],B=L[k+1],n=A.length;for(let i=0;i<n;i++){const j=(i+1)%n;tri(A[i],A[j],B[j]);tri(A[i],B[j],B[i]);}}
+  if(K.volume(m)<0)K.flip(m);return m;};
+PK.U=(()=>{const {M4,prism,cyl,merge,circle,box}=K,PI=Math.PI,TAU=2*PI,BT=PK.BT;
+  const SH=2.1,SHB=2.35;/* octagonal shaft (circumradius) and round bearing hole */
+  const octa=(r,a0=PI/8)=>circle(r,8,0,0,a0);
+  const gearO=(R,Z,o={})=>{const s0=PK._S();PK._S(1);const p=PK.gearOutline(R,Z,o);PK._S(s0);return p;};
+  const U={SH,SHB,BT,octa,
+    /* spur gear, octagonal bore so it keys onto a shaft (bore:'round' to turn freely) */
+    spur(R,Z,h,o={}){const hs=[o.bore==='round'?circle(SHB,32):octa(o.bore||SH+0.12)];if(o.holes)for(const q of o.holes)hs.push(circle(q[2],24,q[0],q[1]));return prism(gearO(R,Z,o),hs,0,h);},
+    helical(R,Z,h,twist,o={}){const base=gearO(R,Z,o),n=o.seg||8,secs=[];for(let k=0;k<=n;k++){const t=k/n,a=o.herring?(t<0.5?t:1-t)*twist:t*twist,c=Math.cos(a),s=Math.sin(a);secs.push({o:base.map(p=>[p[0]*c-p[1]*s,p[0]*s+p[1]*c,t*h]),h:[(o.bore==='round'?circle(SHB,32):octa(SH+0.12)).map(p=>[p[0],p[1],t*h])]});}return K.loftS(secs);},
+    /* bevel gear printed back face down: outer pitch radius Rp, pitch-cone half angle d, face width f; teeth shrink toward the apex above */
+    bevel(Rp,Z,d,f,o={}){const base=gearO(Rp,Z,o),Hx=Rp/Math.tan(d),zt=f*Math.cos(d),n=4,secs=[];const hole=o.bore==='round'?circle(SHB,32):octa(SH+0.12),xh=(o.holes||[]).map(q=>circle(q[2],20,q[0],q[1]));
+      for(let k=0;k<=n;k++){const z=zt*k/n,s=(Hx-z)/Hx;secs.push({o:base.map(p=>[p[0]*s,p[1]*s,z]),h:[hole,...xh].map(h=>h.map(p=>[p[0],p[1],z]))});}
+      let m=K.loftS(secs);const hub=o.hub??0;if(hub>0)m=merge(m,prism(circle(hub,40),[hole],zt,zt+(o.hubH??4)));return m;},
+    /* worm: pitch radius rp, axial pitch p (single start), length L, printed standing */
+    worm(rp,p,L,o={}){const m=p/PI,ad=m,de=1.2*m,n=64,secs=[],dz=p/16;const prof=u=>{u=((u%p)+p)%p/p;const x=Math.abs(u-0.5);return x<0.15?-de:x>0.35?ad:-de+(ad+de)*(x-0.15)/0.2;};
+      for(let z=0;z<=L+1e-9;z+=dz){const ring=[];for(let i=0;i<n;i++){const t=i/n*TAU,r=rp+prof(z-p*t/TAU);ring.push([r*Math.cos(t),r*Math.sin(t),z]);}secs.push({o:ring,h:[octa(SH+0.12).map(q=>[q[0],q[1],z])]});}return K.loftS(secs);},
+    /* straight rack along x, pitch line at y=0, teeth up (+y), printed flat */
+    rack(L,m,depth,h,c0=0){const s=PK._S();PK._S(1);const sh=PK.Sh.rack(-L/2,L/2,m,depth,{c0});PK._S(s);return prism(sh.o.map(p=>[p[0],-p[1]]),[],0,h);},
+    shaft(L,r=SH){/* lying along x, centred, printed flat on a facet */return K.xf(prism(octa(r),[],-L/2,L/2),M4.mul(M4.T(0,0,r*Math.cos(PI/8)),M4.Ry(PI/2)));},
+    /* pose helpers: a part modelled around the z axis, placed with its z axis along n at o, turned by a */
+    at(o,n,a=0,u){return M4.mul(M4.frame(o,n,u),M4.Rz(a));},
+    shaftAt(c,dir,a=0){/* shaft mesh (along x, centre at z=r) placed at centre c along dir, turned by a */const r=SH*Math.cos(PI/8);return M4.mul(M4.frame(c,dir,undefined),M4.mul(M4.Rz(a),M4.mul(M4.Ry(-PI/2),M4.T(0,0,-r))));},
+    plate(x0,y0,x1,y1){return prism(K.rrect(x1-x0,y1-y0,6,6,(x0+x1)/2,(y0+y1)/2),[],0,BT);},
+    /* upright bearing wall: centre (cx,cy) on the base, the shaft runs along 'x' or 'y'; holes [[offset across, height z, r]] */
+    wall(cx,cy,ax,holes,w=18,t=5,top){const zt=top??Math.max(...holes.map(h=>h[1]))+8;const o=[[-w/2,0],[w/2,0],[w/2,zt],[-w/2,zt]];const hs=holes.map(h=>circle(h[2]||SHB,32,h[0],h[1]));
+      const m=prism(o,hs,-t/2,t/2);/* local x across, y up, z along the shaft */const th=ax==='x'?0:ax==='y'?PI/2:ax,c=Math.cos(th),s=Math.sin(th);return K.xf(m,[-s,c,0,0, 0,0,1,0, c,s,0,0, cx,cy,0,1]);},
+    /* hand crank printed flat: octagonal hole at the hub, knob at radius r */
+    crank(r=14,h=4){const arm=prism(K.hull([...circle(5,24),...circle(4.5,24,r,0)]),[octa(SH+0.12)],0,h);return merge(arm,cyl(2.6,h,h+12,20,r,0));},
+    post(x,y,zTop,zBoss){const m=[cyl(PK.PINR,BT,zTop,28,x,y)];if(zBoss>BT)m.push(cyl(4.6,BT,zBoss,28,x,y));return merge(...m);},
+    capMesh(){return K.tubeSolid(4.2,1.95,0,3,32);},
+    /* a part modelled in assembly coordinates, laid down for printing by matrix Rp (rotation); returns {mesh, inv} so pose = W·inv */
+    printed(m,Rp){let q=K.xf(m,Rp);const b=K.bbox(q);const T=M4.T(-(b.lo[0]+b.hi[0])/2,-(b.lo[1]+b.hi[1])/2,-b.lo[2]);q=K.xf(q,T);
+      const RT=[Rp[0],Rp[4],Rp[8],0, Rp[1],Rp[5],Rp[9],0, Rp[2],Rp[6],Rp[10],0, 0,0,0,1];return{mesh:q,inv:M4.mul(RT,M4.T(-T[12],-T[13],-T[14]))};},
+    knob(r=4,h=10){return cyl(r,0,h,24);},
+    collar(r=6,h=4){return prism(circle(r,32),[octa(SH+0.12)],0,h);}};
+  return U;})();
+/* defS: spatial model. spec: {summary, parts:[{id,name,role,mesh,qty,note}], base:()=>[meshes], pose(phi,R)->{id:M|[M..]}, read(phi,R), steps, hardware, cam} */
+PK.defS=function(n,spec){const MODELS=window.CAD.MODELS;MODELS[n]={summary:spec.summary,cam:spec.cam,get hardware(){return spec.hardware||[];},get steps(){return spec.steps||['Print every part as shown in Print layout; none needs supports.','Push the shafts through the bearing holes and slide the gears onto them in the order shown.',spec.drive||'Turn the orange part by hand.'];},params:spec.params,
+  parts(P){this._P=Object.assign({},spec.P||{},P||{});this._R=spec.sim===false?null:PK.runner(spec.sim||n,this._P);const out=[{id:'base',name:spec.baseName||'Base with bearings',role:'frame',mesh:K.merge(...spec.base(this._P)),note:spec.baseNote||'bearing walls print standing; no supports needed'}];
+    for(const p of spec.parts)out.push(Object.assign({role:'link'},p));return out;},
+  pose(phi){const g=this._R?this._R.at(phi):{phi};const ps=spec.pose(phi,g,this._R&&this._R.sim,this._P||{});const inst=[['base',K.M4.id()]];for(const id in ps){const v=ps[id];if(!v)continue;if(v.length===16&&typeof v[0]==='number')inst.push([id,v]);else for(const M of v)inst.push([id,M]);}
+    let read='';try{read=spec.read?spec.read(phi,g):'';}catch(e){}return{inst,belts:spec.belts?spec.belts(phi,g):[],read};}};};
 
 })();
-window.CAD.INDEX={"001": [1, 2, 5, 6, 7, 8, 9, 10], "011": [3, 4, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 243]};
+window.CAD.INDEX={"001": [1, 2, 5, 6, 7, 8, 9, 10], "011": [3, 4, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 243], "025": [25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 201, 221, 222]};

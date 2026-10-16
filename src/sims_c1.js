@@ -153,25 +153,39 @@ function noncirc(num,r1fn,o={}){return reg({num,outLabel:'Driven gear, turns',co
   update(phi){this.build();const n=720,c=Math.floor(phi/TAU),f=phi/TAU-c,x=f*n,i=Math.floor(x);const t=this.T[i]+(this.T[Math.min(n,i+1)]-this.T[i])*(x-i);const r1=r1fn(mod(phi,TAU));this.g={phi,a2:-(t+c*TAU),ratio:r1/(this.d-r1)};},
   output(){return -this.g.a2/TAU;},
   draw(){const g=this.g,F1=[400-this.d/2,265],F2=[400+this.d/2,265];
-    const p1=[];for(let i=0;i<240;i++){const s=i/240*TAU;const r=r1fn(s);p1.push([F1[0]+r*Math.cos(-s+g.phi),F1[1]+r*Math.sin(-s+g.phi)]);}poly(p1);ctx.closePath();paint(C['brass-fill'],C.ink);
-    const p2=this.shape2.filter((_,i)=>i%3===0).map(([m,r])=>[F2[0]+r*Math.cos(PI+m+g.a2),F2[1]+r*Math.sin(PI+m+g.a2)]);poly(p2);ctx.closePath();paint(C['steel-fill'],C.ink);
-    for(const [P,a] of [[F1,g.phi],[F2,g.a2]]){bar(P[0],P[1],P[0]+30*Math.cos(a),P[1]+30*Math.sin(a),5,C.part2);pivot(P[0],P[1],5);}
+    this.ensurePC();
+    ncGear(F1[0],F1[1],this.pcA,0,g.phi,C['brass-fill']);ncGear(F2[0],F2[1],this.pcB,this.phB,PI+g.a2,C['steel-fill']);
     label(o.label||'NON-CIRCULAR GEARS',400,470,'center');},
+  ensurePC(){this.build();
+    if(!this.pcA){const rA=s=>r1fn(mod(-s,TAU)),T=this.T,S2=this.shape2,n=T.length-1,rB=s=>{s=mod(s,TAU);let lo=0,hi=n;while(hi-lo>1){const m=(lo+hi)>>1;if(T[m]<=s)lo=m;else hi=m;}const f=(s-T[lo])/((T[lo+1]-T[lo])||1);return S2[lo][1]+(S2[lo+1][1]-S2[lo][1])*f;};
+      const pa=pitchCurve(rA,null,1),Z=o.Z||Math.max(12,Math.round(pa.L/16));this.pcA=pitchCurve(rA,null,Z);this.pcB=pitchCurve(rB,null,Z);this.phB=ncPhase(this.pcA,this.pcB,0,0);}},
   reads(v){return[['Speed ratio now',`${this.g.ratio.toFixed(2)} × driver`],['Driven',rpmOf(Math.abs(v))]];}});}
 noncirc(30,s=>{const c=Math.abs(Math.cos(s)),q=Math.abs(Math.sin(s));return 70/Math.pow(Math.pow(c,4)+Math.pow(q,4),0.25);},{label:'ROUNDED-SQUARE GEARS · speed varies 4 times a turn'});
 noncirc(38,s=>{const a=mod(s,TAU);return a<PI?70:70+28*Math.sin(a-PI);},{label:'ROUND FOR HALF A TURN, BULGED FOR THE REST',concept:true});
 noncirc(209,s=>75+18*Math.cos(2*s),{label:'LOBED ROLLING WHEELS',concept:true});
 
-function pinionFollower(num,r1fn,o={}){return reg({num,outLabel:'Pinion turns',concept:!!o.concept,
-  reset(){this.pa=0;this.last=null;},
-  update(phi){const r=r1fn(-phi);if(this.last===null)this.last=phi;this.pa+=-(phi-this.last)*r/30;this.last=phi;this.g={phi,r};},
-  output(){return this.pa/TAU;},
-  draw(){const g=this.g,F=[320,265],P=[F[0]+g.r+30,265];const pts=[];for(let i=0;i<240;i++){const s=i/240*TAU,r=r1fn(s);pts.push([F[0]+r*Math.cos(s+g.phi),F[1]+r*Math.sin(s+g.phi)]);}poly(pts);ctx.closePath();paint(C['brass-fill'],C.ink);
-    ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=1;for(let i=0;i<60;i++){const s=i/60*TAU,r=r1fn(s);ctx.beginPath();ctx.moveTo(F[0]+r*Math.cos(s+g.phi),F[1]+r*Math.sin(s+g.phi));ctx.lineTo(F[0]+(r-7)*Math.cos(s+g.phi),F[1]+(r-7)*Math.sin(s+g.phi));ctx.stroke();}ctx.restore();pivot(F[0],F[1],6);
-    if(o.slot){ctx.beginPath();ctx.rect(F[0]+40,P[1]-14,300,28);ctx.rect(F[0]+50,P[1]-6,280,12);paint(C.part2,C.ink);}else{const Q=[720,120];bar(Q[0],Q[1],P[0],P[1],12,C.part2);pivot(Q[0],Q[1],6);ground(Q[0],Q[1]-12,40,true);}
-    drawGear(P[0],P[1],30,12,this.pa,C['steel-fill'],{bore:5});pivot(P[0],P[1],4);label(o.label,400,470,'center');},
-  reads(){return[['Driving radius now',`${this.g.r.toFixed(0)} mm`],['Pinion speed',`${(this.g.r/30).toFixed(2)} × gear`]];}});}
-pinionFollower(35,s=>{const e=0.4,a=95;return a*(1-e*e)/(1+e*Math.cos(s));},{slot:true,label:'PINION SLIDES IN A SLOTTED BAR TO STAY IN MESH'});
+function pinionFollower(num,r1fn,o={}){return reg({num,outLabel:'Pinion turns',concept:!!o.concept,F:[320,265],Q:[720,120],
+  pc(){if(!this._pc){const p0=pitchCurve(r1fn,null,1),Zg=Math.round(p0.L/(TAU*30/12));this._pc=pitchCurve(r1fn,null,Zg);this.Rp=12*this._pc.p/TAU;}return this._pc;},
+  reset(){this.aU=null;this.prevP=null;},
+  /* pinion centre = pitch point + Rp along the curve normal; slot: centre stays on the slot line; arm: centre stays at the arm length from its pivot */
+  update(phi){const pc=this.pc(),Rp=this.Rp,F=this.F,cs=Math.cos(phi),sn=Math.sin(phi);
+    const at=a=>{const q=pc.at(a),tl=Math.hypot(q[2],q[3])||1,nx=q[3]/tl,ny=-q[2]/tl,lx=q[0]+Rp*nx,ly=q[1]+Rp*ny;return{w:[F[0]+lx*cs-ly*sn,F[1]+lx*sn+ly*cs],n:[nx*cs-ny*sn,nx*sn+ny*cs],r:Math.hypot(q[0],q[1])};};
+    if(this.Larm===undefined){const z=at(pc.arcAt(0));this.Q=[z.w[0]+30,F[1]-215];this.Larm=Math.hypot(z.w[0]-this.Q[0],z.w[1]-this.Q[1]);}
+    const Q=this.Q,f=a=>{const z=at(a);return o.slot?z.w[1]-F[1]:Math.hypot(z.w[0]-Q[0],z.w[1]-Q[1])-this.Larm;};
+    const guess=this.aU===null?pc.arcAt(-phi):mod(this.aU,pc.L),N=480,L=pc.L;let best=null,bd=1e9;
+    for(let i=0;i<N;i++){const a0=i/N*L,a1=(i+1)/N*L,f0=f(a0),f1=f(a1);if(f0*f1>0)continue;let lo=a0,hi=a1,flo=f0;for(let k=0;k<28;k++){const m=(lo+hi)/2,fm=f(m);if(fm*flo>0){lo=m;flo=fm;}else hi=m;}const r=(lo+hi)/2;
+      const zw=at(r).w;if(zw[0]<F[0])continue;const pp=this.prevP||[F[0]+200,F[1]];const d=Math.hypot(zw[0]-pp[0],zw[1]-pp[1]);if(d<bd){bd=d;best=r;}}
+    if(best===null)best=guess;if(this.aU===null)this.aU=best;else this.aU+=mod(best-mod(this.aU,L)+L/2,L)-L/2;
+    const z=at(best);this.prevP=z.w;this.g={phi,r:z.r,P:z.w,pa:Math.atan2(-z.n[1],-z.n[0])-(PI/12-this.aU/Rp)};},
+  output(){return this.g.pa/TAU;},
+  draw(){const g=this.g,pc=this.pc(),F=this.F,Rp=this.Rp,P=g.P;
+    if(o.slot){ctx.beginPath();ctx.rect(F[0]+60,F[1]-14,330,28);ctx.rect(F[0]+70,F[1]-6,310,12);paint(C.part2,C.ink);}
+    ncGear(F[0],F[1],pc,0,g.phi,C['brass-fill']);
+    if(o.slot){springZ(P[0]+12,P[1],F[0]+380,P[1],9,7);ctx.beginPath();ctx.rect(P[0]-9,P[1]-6,18,12);paint(C.part,C.ink);}
+    else{const Q=this.Q;bar(Q[0],Q[1],P[0],P[1],12,C.part2);pivot(Q[0],Q[1],6);ground(Q[0],Q[1]-12,40,true);}
+    drawGear(P[0],P[1],Rp,12,g.pa,C['steel-fill'],{bore:5});pivot(P[0],P[1],4);label(o.label,400,470,'center');},
+  reads(){return[['Driving radius now',`${this.g.r.toFixed(0)} mm`],['Pinion speed',`${(this.g.r/this.Rp).toFixed(2)} × gear`]];}});}
+pinionFollower(35,s=>{const e=0.4,a=95;return a*(1-e*e)/(1+e*Math.cos(s));},{slot:true,label:'PINION SHAFT SLIDES IN A SLOTTED BAR · A SPRING KEEPS IT IN MESH'});
 pinionFollower(221,s=>{const e=0.4,a=95;return a*(1-e*e)/(1+e*Math.cos(s));},{label:'PINION ON A SWINGING ARM FOLLOWS THE ELLIPSE'});
 pinionFollower(201,s=>90+22*Math.cos(s)+12*Math.cos(3*s),{label:'IRREGULAR GEAR · arm swings unevenly'});
 pinionFollower(222,s=>{const R=90,e=28;return Math.sqrt(R*R-e*e*Math.sin(s)**2)+e*Math.cos(s);},{label:'ROUND GEAR ON AN OFF-CENTRE AXIS',concept:false});
@@ -231,7 +245,7 @@ function mangle(num,o){return reg({num,outLabel:'Wheel angle, degrees',concept:!
     pivot(O[0],O[1],6);const P=[O[0]+g.pc[0],O[1]+g.pc[1]];bar(P[0],40,P[0],P[1],10,C.part2);drawGear(P[0],P[1],g.rp,9,g.phi,C['brass-fill'],{bore:4});pivot(P[0],P[1],3);
     label(o.label,400,505,'center');},
   reads(){return[['Wheel',`${(this.g.w*180/PI).toFixed(0)}°`],['Pinion','turns one way only'],['Speeds',Math.abs(o.Ro-o.Ri)<1?'equal both ways':'slower one way']];}});}
-mangle(36,{Ro:150,Ri:110,span:PI*1.6,label:'PINION RUNS ROUND THE END OF THE PIN ROW AND REVERSES THE WHEEL'});
+mangle(36,{Ro:130,Ri:130,span:PI*1.7,label:'ONE ROW OF TEETH · the pinion works outside it one way and inside it the other'});
 mangle(192,{Ro:160,Ri:100,span:PI*1.5,label:'SPEED CHANGES THROUGH EACH SWING',concept:true});
 mangle(193,{Ro:165,Ri:105,span:PI*1.8,label:'NEARLY A FULL TURN EACH WAY, SLOWER ONE WAY'});
 mangle(194,{Ro:132,Ri:128,span:PI*1.6,label:'EQUAL SPEED BOTH WAYS'});

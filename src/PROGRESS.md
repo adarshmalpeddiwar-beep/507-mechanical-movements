@@ -23,6 +23,13 @@ fix them with attention to detail, and give EVERY mechanism a 3D-printable model
 - 2D gears now use involute teeth (kit gearPts); 3D gear phase matches the 2D angle (tooth centred on angle 0).
 - Models 1-10: bespoke file cad_models_001.js. New models: cad_models_011.js (11-50), _051 ... by range of 40-50.
 
+## Spatial kit (added): PK.defS(n,{base:P=>[meshes], parts:[{id,mesh}], pose(phi,g,sim,P)->{id:M4|[M4]}, params, read, cam})
+- PK.U (mm): spur, helical, bevel (printed back face down, z toward apex), worm, rack, shaft (octagonal, lying along x), wall(cx,cy,axis|angle,[[across,z,r]]),
+  post, plate, crank, collar, capMesh, printed(meshAsm,R)->{mesh,inv}; pose helpers U.at(o,n,a,u), U.shaftAt(c,dir,a). K.loftS(sections) lofts rings with holes.
+- 2D: R3 now renders through WebGL z-buffer (GL3) with painter fallback; non-circular gears have real teeth (pitchCurve/toothedCurve/ncPhase in sims_d5.js, exported on MB).
+
 ## Status
 (update after each batch: range, 2D fixes done, 3D done)
 - 24: 3D test model done.
+- 25–50: 2D audited and fixed (33 phase+teeth, 25 params bug, 29 3D, 35/201/221/222 exact follower, 36 single pin row, 37 fixed long pinion, 45 section, 46 upright axes, 49 rebuilt per Brown, 50 yokes). 3D models done for 25–50 (cad_models_025.js).
+- Next: 51+ (2D audit then 3D in cad_models_051.js).

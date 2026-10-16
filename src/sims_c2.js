@@ -101,7 +101,7 @@ function twinRatchet(num,o){return reg({num,outLabel:'Output shaft, turns',conce
     stripeShaft(A[0],B[0],260,8,this.w,C.part2);label(o.label,400,30,'center');
     function P0y(P){return P[1]+88;}},
   reads(){return[['Input','swings both ways'],['Output','turns one way, both strokes'],['Turns',`${(this.w/TAU).toFixed(2)}`]];}});}
-twinRatchet(49,{label:'TWO OPPOSED RATCHETS MAKE THE SWING CONTINUOUS'});twinRatchet(82,{kind:'treadle',label:'TWO TREADLES, ONE CHAIN, TWO RATCHETS',concept:true});twinRatchet(390,{label:'LEVER AND BANDS TURN THE FLYWHEEL ONE WAY'});
+twinRatchet(82,{kind:'treadle',label:'TWO TREADLES, ONE CHAIN, TWO RATCHETS',concept:true});twinRatchet(390,{label:'LEVER AND BANDS TURN THE FLYWHEEL ONE WAY'});
 twinRatchet(360,{label:'ROCKING BEAM, DRUMS AND RATCHETS TURN THE SHAFT',concept:true});
 
 reg({num:116,outLabel:'Shaft turns',concept:true,

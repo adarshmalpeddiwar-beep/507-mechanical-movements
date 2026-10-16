@@ -1860,25 +1860,39 @@ function noncirc(num,r1fn,o={}){return reg({num,outLabel:'Driven gear, turns',co
   update(phi){this.build();const n=720,c=Math.floor(phi/TAU),f=phi/TAU-c,x=f*n,i=Math.floor(x);const t=this.T[i]+(this.T[Math.min(n,i+1)]-this.T[i])*(x-i);const r1=r1fn(mod(phi,TAU));this.g={phi,a2:-(t+c*TAU),ratio:r1/(this.d-r1)};},
   output(){return -this.g.a2/TAU;},
   draw(){const g=this.g,F1=[400-this.d/2,265],F2=[400+this.d/2,265];
-    const p1=[];for(let i=0;i<240;i++){const s=i/240*TAU;const r=r1fn(s);p1.push([F1[0]+r*Math.cos(-s+g.phi),F1[1]+r*Math.sin(-s+g.phi)]);}poly(p1);ctx.closePath();paint(C['brass-fill'],C.ink);
-    const p2=this.shape2.filter((_,i)=>i%3===0).map(([m,r])=>[F2[0]+r*Math.cos(PI+m+g.a2),F2[1]+r*Math.sin(PI+m+g.a2)]);poly(p2);ctx.closePath();paint(C['steel-fill'],C.ink);
-    for(const [P,a] of [[F1,g.phi],[F2,g.a2]]){bar(P[0],P[1],P[0]+30*Math.cos(a),P[1]+30*Math.sin(a),5,C.part2);pivot(P[0],P[1],5);}
+    this.ensurePC();
+    ncGear(F1[0],F1[1],this.pcA,0,g.phi,C['brass-fill']);ncGear(F2[0],F2[1],this.pcB,this.phB,PI+g.a2,C['steel-fill']);
     label(o.label||'NON-CIRCULAR GEARS',400,470,'center');},
+  ensurePC(){this.build();
+    if(!this.pcA){const rA=s=>r1fn(mod(-s,TAU)),T=this.T,S2=this.shape2,n=T.length-1,rB=s=>{s=mod(s,TAU);let lo=0,hi=n;while(hi-lo>1){const m=(lo+hi)>>1;if(T[m]<=s)lo=m;else hi=m;}const f=(s-T[lo])/((T[lo+1]-T[lo])||1);return S2[lo][1]+(S2[lo+1][1]-S2[lo][1])*f;};
+      const pa=pitchCurve(rA,null,1),Z=o.Z||Math.max(12,Math.round(pa.L/16));this.pcA=pitchCurve(rA,null,Z);this.pcB=pitchCurve(rB,null,Z);this.phB=ncPhase(this.pcA,this.pcB,0,0);}},
   reads(v){return[['Speed ratio now',`${this.g.ratio.toFixed(2)} × driver`],['Driven',rpmOf(Math.abs(v))]];}});}
 noncirc(30,s=>{const c=Math.abs(Math.cos(s)),q=Math.abs(Math.sin(s));return 70/Math.pow(Math.pow(c,4)+Math.pow(q,4),0.25);},{label:'ROUNDED-SQUARE GEARS · speed varies 4 times a turn'});
 noncirc(38,s=>{const a=mod(s,TAU);return a<PI?70:70+28*Math.sin(a-PI);},{label:'ROUND FOR HALF A TURN, BULGED FOR THE REST',concept:true});
 noncirc(209,s=>75+18*Math.cos(2*s),{label:'LOBED ROLLING WHEELS',concept:true});
 
-function pinionFollower(num,r1fn,o={}){return reg({num,outLabel:'Pinion turns',concept:!!o.concept,
-  reset(){this.pa=0;this.last=null;},
-  update(phi){const r=r1fn(-phi);if(this.last===null)this.last=phi;this.pa+=-(phi-this.last)*r/30;this.last=phi;this.g={phi,r};},
-  output(){return this.pa/TAU;},
-  draw(){const g=this.g,F=[320,265],P=[F[0]+g.r+30,265];const pts=[];for(let i=0;i<240;i++){const s=i/240*TAU,r=r1fn(s);pts.push([F[0]+r*Math.cos(s+g.phi),F[1]+r*Math.sin(s+g.phi)]);}poly(pts);ctx.closePath();paint(C['brass-fill'],C.ink);
-    ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=1;for(let i=0;i<60;i++){const s=i/60*TAU,r=r1fn(s);ctx.beginPath();ctx.moveTo(F[0]+r*Math.cos(s+g.phi),F[1]+r*Math.sin(s+g.phi));ctx.lineTo(F[0]+(r-7)*Math.cos(s+g.phi),F[1]+(r-7)*Math.sin(s+g.phi));ctx.stroke();}ctx.restore();pivot(F[0],F[1],6);
-    if(o.slot){ctx.beginPath();ctx.rect(F[0]+40,P[1]-14,300,28);ctx.rect(F[0]+50,P[1]-6,280,12);paint(C.part2,C.ink);}else{const Q=[720,120];bar(Q[0],Q[1],P[0],P[1],12,C.part2);pivot(Q[0],Q[1],6);ground(Q[0],Q[1]-12,40,true);}
-    drawGear(P[0],P[1],30,12,this.pa,C['steel-fill'],{bore:5});pivot(P[0],P[1],4);label(o.label,400,470,'center');},
-  reads(){return[['Driving radius now',`${this.g.r.toFixed(0)} mm`],['Pinion speed',`${(this.g.r/30).toFixed(2)} × gear`]];}});}
-pinionFollower(35,s=>{const e=0.4,a=95;return a*(1-e*e)/(1+e*Math.cos(s));},{slot:true,label:'PINION SLIDES IN A SLOTTED BAR TO STAY IN MESH'});
+function pinionFollower(num,r1fn,o={}){return reg({num,outLabel:'Pinion turns',concept:!!o.concept,F:[320,265],Q:[720,120],
+  pc(){if(!this._pc){const p0=pitchCurve(r1fn,null,1),Zg=Math.round(p0.L/(TAU*30/12));this._pc=pitchCurve(r1fn,null,Zg);this.Rp=12*this._pc.p/TAU;}return this._pc;},
+  reset(){this.aU=null;this.prevP=null;},
+  /* pinion centre = pitch point + Rp along the curve normal; slot: centre stays on the slot line; arm: centre stays at the arm length from its pivot */
+  update(phi){const pc=this.pc(),Rp=this.Rp,F=this.F,cs=Math.cos(phi),sn=Math.sin(phi);
+    const at=a=>{const q=pc.at(a),tl=Math.hypot(q[2],q[3])||1,nx=q[3]/tl,ny=-q[2]/tl,lx=q[0]+Rp*nx,ly=q[1]+Rp*ny;return{w:[F[0]+lx*cs-ly*sn,F[1]+lx*sn+ly*cs],n:[nx*cs-ny*sn,nx*sn+ny*cs],r:Math.hypot(q[0],q[1])};};
+    if(this.Larm===undefined){const z=at(pc.arcAt(0));this.Q=[z.w[0]+30,F[1]-215];this.Larm=Math.hypot(z.w[0]-this.Q[0],z.w[1]-this.Q[1]);}
+    const Q=this.Q,f=a=>{const z=at(a);return o.slot?z.w[1]-F[1]:Math.hypot(z.w[0]-Q[0],z.w[1]-Q[1])-this.Larm;};
+    const guess=this.aU===null?pc.arcAt(-phi):mod(this.aU,pc.L),N=480,L=pc.L;let best=null,bd=1e9;
+    for(let i=0;i<N;i++){const a0=i/N*L,a1=(i+1)/N*L,f0=f(a0),f1=f(a1);if(f0*f1>0)continue;let lo=a0,hi=a1,flo=f0;for(let k=0;k<28;k++){const m=(lo+hi)/2,fm=f(m);if(fm*flo>0){lo=m;flo=fm;}else hi=m;}const r=(lo+hi)/2;
+      const zw=at(r).w;if(zw[0]<F[0])continue;const pp=this.prevP||[F[0]+200,F[1]];const d=Math.hypot(zw[0]-pp[0],zw[1]-pp[1]);if(d<bd){bd=d;best=r;}}
+    if(best===null)best=guess;if(this.aU===null)this.aU=best;else this.aU+=mod(best-mod(this.aU,L)+L/2,L)-L/2;
+    const z=at(best);this.prevP=z.w;this.g={phi,r:z.r,P:z.w,pa:Math.atan2(-z.n[1],-z.n[0])-(PI/12-this.aU/Rp)};},
+  output(){return this.g.pa/TAU;},
+  draw(){const g=this.g,pc=this.pc(),F=this.F,Rp=this.Rp,P=g.P;
+    if(o.slot){ctx.beginPath();ctx.rect(F[0]+60,F[1]-14,330,28);ctx.rect(F[0]+70,F[1]-6,310,12);paint(C.part2,C.ink);}
+    ncGear(F[0],F[1],pc,0,g.phi,C['brass-fill']);
+    if(o.slot){springZ(P[0]+12,P[1],F[0]+380,P[1],9,7);ctx.beginPath();ctx.rect(P[0]-9,P[1]-6,18,12);paint(C.part,C.ink);}
+    else{const Q=this.Q;bar(Q[0],Q[1],P[0],P[1],12,C.part2);pivot(Q[0],Q[1],6);ground(Q[0],Q[1]-12,40,true);}
+    drawGear(P[0],P[1],Rp,12,g.pa,C['steel-fill'],{bore:5});pivot(P[0],P[1],4);label(o.label,400,470,'center');},
+  reads(){return[['Driving radius now',`${this.g.r.toFixed(0)} mm`],['Pinion speed',`${(this.g.r/this.Rp).toFixed(2)} × gear`]];}});}
+pinionFollower(35,s=>{const e=0.4,a=95;return a*(1-e*e)/(1+e*Math.cos(s));},{slot:true,label:'PINION SHAFT SLIDES IN A SLOTTED BAR · A SPRING KEEPS IT IN MESH'});
 pinionFollower(221,s=>{const e=0.4,a=95;return a*(1-e*e)/(1+e*Math.cos(s));},{label:'PINION ON A SWINGING ARM FOLLOWS THE ELLIPSE'});
 pinionFollower(201,s=>90+22*Math.cos(s)+12*Math.cos(3*s),{label:'IRREGULAR GEAR · arm swings unevenly'});
 pinionFollower(222,s=>{const R=90,e=28;return Math.sqrt(R*R-e*e*Math.sin(s)**2)+e*Math.cos(s);},{label:'ROUND GEAR ON AN OFF-CENTRE AXIS',concept:false});
@@ -1938,7 +1952,7 @@ function mangle(num,o){return reg({num,outLabel:'Wheel angle, degrees',concept:!
     pivot(O[0],O[1],6);const P=[O[0]+g.pc[0],O[1]+g.pc[1]];bar(P[0],40,P[0],P[1],10,C.part2);drawGear(P[0],P[1],g.rp,9,g.phi,C['brass-fill'],{bore:4});pivot(P[0],P[1],3);
     label(o.label,400,505,'center');},
   reads(){return[['Wheel',`${(this.g.w*180/PI).toFixed(0)}°`],['Pinion','turns one way only'],['Speeds',Math.abs(o.Ro-o.Ri)<1?'equal both ways':'slower one way']];}});}
-mangle(36,{Ro:150,Ri:110,span:PI*1.6,label:'PINION RUNS ROUND THE END OF THE PIN ROW AND REVERSES THE WHEEL'});
+mangle(36,{Ro:130,Ri:130,span:PI*1.7,label:'ONE ROW OF TEETH · the pinion works outside it one way and inside it the other'});
 mangle(192,{Ro:160,Ri:100,span:PI*1.5,label:'SPEED CHANGES THROUGH EACH SWING',concept:true});
 mangle(193,{Ro:165,Ri:105,span:PI*1.8,label:'NEARLY A FULL TURN EACH WAY, SLOWER ONE WAY'});
 mangle(194,{Ro:132,Ri:128,span:PI*1.6,label:'EQUAL SPEED BOTH WAYS'});
@@ -2170,7 +2184,7 @@ function twinRatchet(num,o){return reg({num,outLabel:'Output shaft, turns',conce
     stripeShaft(A[0],B[0],260,8,this.w,C.part2);label(o.label,400,30,'center');
     function P0y(P){return P[1]+88;}},
   reads(){return[['Input','swings both ways'],['Output','turns one way, both strokes'],['Turns',`${(this.w/TAU).toFixed(2)}`]];}});}
-twinRatchet(49,{label:'TWO OPPOSED RATCHETS MAKE THE SWING CONTINUOUS'});twinRatchet(82,{kind:'treadle',label:'TWO TREADLES, ONE CHAIN, TWO RATCHETS',concept:true});twinRatchet(390,{label:'LEVER AND BANDS TURN THE FLYWHEEL ONE WAY'});
+twinRatchet(82,{kind:'treadle',label:'TWO TREADLES, ONE CHAIN, TWO RATCHETS',concept:true});twinRatchet(390,{label:'LEVER AND BANDS TURN THE FLYWHEEL ONE WAY'});
 twinRatchet(360,{label:'ROCKING BEAM, DRUMS AND RATCHETS TURN THE SHAFT',concept:true});
 
 reg({num:116,outLabel:'Shaft turns',concept:true,
@@ -3546,7 +3560,233 @@ rightAngleBelt(243,{note:'ONE HORIZONTAL SHAFT DRIVES TWO UPRIGHT SHAFTS WITH ON
   return{A,ratio:R/r,belt,pulleys:[{K:A,w:18,ang:p=>-p,f:C['brass-fill']},{K:B1,w:16,ang:p=>-p*R/r,f:C['steel-fill']},{K:B2,w:16,ang:p=>-p*R/r,f:C['steel-fill']}],
     shafts:[[[0,-90,0],[0,60,0],6,C.part],[[130,190,R-120],[130,190,R+110],6,C.part],[[300,r,R-120],[300,r,R+110],6,C.part]]};}});
 
+/* ================= audit pass · shaded 3D canvas renderer (R3) and solid gears ================= */
+/* colour helpers */
+function rgbOf(c){c=(c||'#999').trim();if(c[0]==='#'){if(c.length===4)c='#'+c[1]+c[1]+c[2]+c[2]+c[3]+c[3];return[1,3,5].map(i=>parseInt(c.slice(i,i+2),16));}const m=c.match(/[\d.]+/g)||[150,150,150];return m.slice(0,3).map(Number);}
+function shade(c,k){const [r,g,b]=rgbOf(c);const f=v=>Math.max(0,Math.min(255,Math.round(v*k)));return`rgb(${f(r)},${f(g)},${f(b)})`;}
+/* R3: collects polygons in world space, culls back faces, sorts by depth and paints with simple lighting.
+   cam = {yaw,pitch,sc,cx,cy} (same convention as cam3). */
+function R3(cam){const P0=cam3(cam.yaw,cam.pitch,cam.sc||1,cam.cx,cam.cy),P=p=>{const q=P0(p);return[q[0],q[1],-q[2]];};/* cam3's third value grows toward the viewer; R3 wants depth */const cy_=Math.cos(cam.yaw),sy_=Math.sin(cam.yaw),cp=Math.cos(cam.pitch),sp=Math.sin(cam.pitch);
+  const view=[-sy_*cp,-cy_*cp,-sp];/* direction of increasing depth (away from viewer) */
+  const Lw=v3.norm([-0.35-0.6*cy_,0.6*sy_-0.5,0.9]);const faces=[],lines=[];
+  const R={P,view,
+    /* face: pts (3D), fill, opts {out: point the outward normal faces away from, edge: stroke, both: draw even if back-facing} */
+    face(pts,fill,o={}){if(pts.length<3)return;let n=[0,0,0];for(let i=0;i<pts.length;i++){const a=pts[i],b=pts[(i+1)%pts.length];n[0]+=(a[1]-b[1])*(a[2]+b[2]);n[1]+=(a[2]-b[2])*(a[0]+b[0]);n[2]+=(a[0]-b[0])*(a[1]+b[1]);}
+      const l=Math.hypot(...n);if(l<1e-9)return;n=n.map(v=>v/l);
+      if(v3.dot(n,view)>0)n=n.map(v=>-v);/* two-sided: light the side facing the viewer */
+      const sc=pts.map(P);let dep=0;for(const s of sc)dep+=s[2];dep/=sc.length;if(o.bias)dep+=o.bias;
+      const lam=Math.max(0,v3.dot(n,Lw));faces.push({sc,dep,fill,k:0.62+0.5*lam,edge:o.edge,lw:o.lw});},
+    line(a,b,col,w=1.2,bias=0){const A=P(a),B=P(b);lines.push({A,B,col,w,dep:(A[2]+B[2])/2+bias});},
+    /* loft between two loops with equal point counts (a = front, b = back); caps optional */
+    loft(a,b,fill,o={}){const n=a.length,ctr=a.concat(b).reduce((s,p)=>[s[0]+p[0],s[1]+p[1],s[2]+p[2]],[0,0,0]).map(v=>v/(2*n));const out=o.center||ctr;
+      for(let i=0;i<n;i++){const j=(i+1)%n;if(o.open&&j===0)break;R.face([a[i],a[j],b[j],b[i]],fill,{out:o.sideOut?o.sideOut(i):out});}
+      if(o.caps!==false){R.face(a,o.capFill||fill,{out:o.capOutA||out,edge:o.edge??true,bias:o.capBias||0});R.face(b.slice().reverse(),o.capFill||fill,{out:o.capOutB||out,edge:o.edge??true,bias:o.capBias||0});}},
+    draw(){if(GL3.ok()&&GL3.draw(faces,lines))return;faces.sort((p,q)=>q.dep-p.dep);const items=faces.concat(lines.map(l=>Object.assign(l,{isLine:1}))).sort((p,q)=>q.dep-p.dep);
+      for(const f of items){if(f.isLine){ctx.save();ctx.strokeStyle=f.col||C.ink;ctx.lineWidth=f.w;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(f.A[0],f.A[1]);ctx.lineTo(f.B[0],f.B[1]);ctx.stroke();ctx.restore();continue;}
+        ctx.beginPath();ctx.moveTo(f.sc[0][0],f.sc[0][1]);for(let i=1;i<f.sc.length;i++)ctx.lineTo(f.sc[i][0],f.sc[i][1]);ctx.closePath();const col=shade(f.fill,f.k);ctx.fillStyle=col;ctx.fill();
+        ctx.strokeStyle=f.edge?C.ink:col;ctx.lineWidth=f.edge?(f.lw||1):0.6;ctx.stroke();}}};
+  return R;}
+/* GL3: z-buffered WebGL back end for R3 (exact hidden surfaces, antialiased); falls back to the painter if WebGL is missing */
+const GL3=(()=>{let cv=null,gl=null,pr=null,bf=null,okv=null;
+  function init(){okv=false;try{cv=document.createElement('canvas');gl=cv.getContext('webgl',{antialias:true,alpha:true,premultipliedAlpha:false,preserveDrawingBuffer:true});if(!gl)return;
+    const sh=(t,src)=>{const o=gl.createShader(t);gl.shaderSource(o,src);gl.compileShader(o);return o;};pr=gl.createProgram();
+    gl.attachShader(pr,sh(gl.VERTEX_SHADER,'attribute vec3 p;attribute vec4 c;varying vec4 v;void main(){gl_Position=vec4(p,1.0);v=c;}'));
+    gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,'precision mediump float;varying vec4 v;void main(){gl_FragColor=v;}'));gl.linkProgram(pr);if(!gl.getProgramParameter(pr,gl.LINK_STATUS))return;bf=gl.createBuffer();okv=true;}catch(e){okv=false;}}
+  return{ok(){if(okv===null)init();return okv&&ctx&&ctx.canvas&&ctx.getTransform;},
+    draw(faces,lines){const T=ctx.getTransform(),Wd=ctx.canvas.width,Hd=ctx.canvas.height;if(!Wd||!Hd)return false;if(cv.width!==Wd)cv.width=Wd;if(cv.height!==Hd)cv.height=Hd;
+      let dmin=1e9,dmax=-1e9;for(const f of faces)for(const p of f.sc){if(p[2]<dmin)dmin=p[2];if(p[2]>dmax)dmax=p[2];}for(const l of lines){dmin=Math.min(dmin,l.A[2],l.B[2]);dmax=Math.max(dmax,l.A[2],l.B[2]);}
+      if(!(dmax>dmin)){dmax=dmin+1;}const pad=(dmax-dmin)*0.05+1;dmin-=pad;dmax+=pad;const sc=Math.hypot(T.a,T.b);
+      const X=p=>(T.a*p[0]+T.c*p[1]+T.e)/Wd*2-1,Y=p=>1-(T.b*p[0]+T.d*p[1]+T.f)/Hd*2,Z=(d,b)=>((d-dmin)/(dmax-dmin))*2-1-(b||0);
+      const out=[];const push=(x,y,z,c)=>{out.push(x,y,z,c[0],c[1],c[2],c[3]);};const ink=rgbOf(C.ink).map(v=>v/255).concat([1]);
+      for(const f of faces){const [r,g,b]=rgbOf(f.fill),k=f.k;const c=[Math.min(1,r*k/255),Math.min(1,g*k/255),Math.min(1,b*k/255),1];const n=f.sc.length;let cx=0,cy=0,cz=0;for(const p of f.sc){cx+=p[0];cy+=p[1];cz+=p[2];}const ctr=[cx/n,cy/n,cz/n];
+        for(let i=0;i<n;i++){const a=f.sc[i],q=f.sc[(i+1)%n];push(X(ctr),Y(ctr),Z(ctr[2]),c);push(X(a),Y(a),Z(a[2]),c);push(X(q),Y(q),Z(q[2]),c);}}
+      const seg=(A,B,w,col,bias)=>{const ax=T.a*A[0]+T.c*A[1]+T.e,ay=T.b*A[0]+T.d*A[1]+T.f,bx=T.a*B[0]+T.c*B[1]+T.e,by=T.b*B[0]+T.d*B[1]+T.f;const L=Math.hypot(bx-ax,by-ay)||1e-6,hw=Math.max(0.5,w*sc/2);const nx=-(by-ay)/L*hw,ny=(bx-ax)/L*hw;
+        const P=(x,y,d)=>[x/Wd*2-1,1-y/Hd*2,Z(d,bias)];const v=[P(ax+nx,ay+ny,A[2]),P(ax-nx,ay-ny,A[2]),P(bx-nx,by-ny,B[2]),P(bx+nx,by+ny,B[2])];
+        for(const i of [0,1,2,0,2,3])push(v[i][0],v[i][1],v[i][2],col);};
+      for(const f of faces)if(f.edge){const n=f.sc.length;for(let i=0;i<n;i++)seg(f.sc[i],f.sc[(i+1)%n],(f.lw||1)*0.8,ink,0.004);}
+      for(const l of lines){const c=rgbOf(l.col||C.ink).map(v=>v/255).concat([1]);seg(l.A,l.B,l.w,c,0.006);}
+      const data=new Float32Array(out);gl.viewport(0,0,Wd,Hd);gl.clearColor(0,0,0,0);gl.clearDepth(1);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+      gl.useProgram(pr);gl.bindBuffer(gl.ARRAY_BUFFER,bf);gl.bufferData(gl.ARRAY_BUFFER,data,gl.STREAM_DRAW);const ap=gl.getAttribLocation(pr,'p'),ac=gl.getAttribLocation(pr,'c');
+      gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,28,0);gl.enableVertexAttribArray(ac);gl.vertexAttribPointer(ac,4,gl.FLOAT,false,28,12);gl.drawArrays(gl.TRIANGLES,0,data.length/7);
+      ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(cv,0,0);ctx.restore();return true;}};})();
+/* frame helpers: map local (x,y,z) with axes u,v,n at origin c */
+function fr3(c,u,v){const n=v3.cross(u,v);return{c,u,v,n,at(x,y,z=0){return[c[0]+u[0]*x+v[0]*y+n[0]*z,c[1]+u[1]*x+v[1]*y+n[1]*z,c[2]+u[2]*x+v[2]*y+n[2]*z];}};}
+function rot2(p,a){const c=Math.cos(a),s=Math.sin(a);return[p[0]*c-p[1]*s,p[0]*s+p[1]*c];}
+/* involute outline at origin, angle a (uses the kit's gearPts) */
+const gearOutline2=(R,Z,a)=>gearPts(0,0,R,Z,a,false);
+/* solid spur / helical gear: F frame (gear plane u,v; axis n), width w, twist = helix twist across the face (rad) */
+function gear3(R,F,Rp,Z,w,a,fill,o={}){const tw=o.twist||0,seg=o.seg||(tw?4:1),bore=o.bore??Math.max(4,Rp*0.14);
+  const loops=[];for(let k=0;k<=seg;k++){const t=k/seg,z=-w/2+w*t;const ang=a+(o.herring?(t<0.5?t:1-t)*2*tw/2:(t-0.5)*tw);loops.push(gearOutline2(Rp,Z,ang).map(p=>F.at(p[0],p[1],z)));}
+  for(let k=0;k<seg;k++)R.loft(loops[k],loops[k+1],fill,{caps:false,center:F.c,sideOut:i=>F.c});
+  /* caps with hub and bore */const cap=(z,fl)=>{const pts=loops[z<0?0:seg];R.face(z<0?pts.slice().reverse():pts,fill,{out:F.at(0,0,-z*5),edge:true});
+    const hub=[],hb=[];for(let i=0;i<24;i++){const t=i/24*TAU;hub.push(F.at(bore*Math.cos(t),bore*Math.sin(t),z*1.001));}R.face(hub,C.part,{out:F.at(0,0,-z*5),edge:true,bias:-0.5});
+    if(o.mark!==false){const m1=F.at((bore+3)*Math.cos(a+(z>0?tw/2:-tw/2)),(bore+3)*Math.sin(a+(z>0?tw/2:-tw/2)),z*1.002),m2=F.at((Rp-2.2*Rp/Z*1.6)*Math.cos(a+(z>0?tw/2:-tw/2)),(Rp-2.2*Rp/Z*1.6)*Math.sin(a+(z>0?tw/2:-tw/2)),z*1.002);R.line(m1,m2,C.ink,1.2,-0.6);}};
+  cap(-w/2);cap(w/2);}
+/* bevel gear: apex A, axis n (pointing from apex to the gear), u in the gear plane; outer pitch radius Rp, cone half-angle d, face width f (along the cone) */
+function bevel3(R,A,n,u,Rp,Z,d,f,a,fill,o={}){n=v3.norm(n);u=v3.norm(v3.sub(u,v3.mul(n,v3.dot(u,n))));const v=v3.cross(n,u);
+  const L=Rp/Math.sin(d),k=(L-f)/L;const outer=gearOutline2(Rp,Z,a),zO=L*Math.cos(d),zI=(L-f)*Math.cos(d);
+  /* teeth stand on the pitch cone: scale radially about the cone, and tilt the tooth height along the back cone */
+  const lay=(p,s,z)=>{const r=Math.hypot(p[0],p[1]),dr=(r-Rp)*s,rr=Rp*s+dr*Math.cos(d),zz=z-dr*Math.sin(d);const t=Math.atan2(p[1],p[0]);return v3.add(A,v3.add(v3.mul(n,zz),v3.add(v3.mul(u,rr*Math.cos(t)),v3.mul(v,rr*Math.sin(t)))));};
+  const lo=outer.map(p=>lay(p,1,zO)),li=outer.map(p=>lay(p,k,zI));const ctr=v3.add(A,v3.mul(n,(zO+zI)/2));
+  R.loft(lo,li,fill,{caps:false,center:ctr,sideOut:()=>v3.add(A,v3.mul(n,zO*0.5))});
+  R.face(lo,fill,{out:A,edge:true});R.face(li.slice().reverse(),fill,{out:v3.add(A,v3.mul(n,zO*3)),edge:true});
+  /* back boss */const hub=[],hub2=[],rb=Rp*0.42;for(let i=0;i<24;i++){const t=i/24*TAU;hub.push(v3.add(A,v3.add(v3.mul(n,zO+0.5),v3.add(v3.mul(u,rb*Math.cos(t)),v3.mul(v,rb*Math.sin(t))))));hub2.push(v3.add(A,v3.add(v3.mul(n,zO+(o.boss??14)),v3.add(v3.mul(u,rb*0.8*Math.cos(t)),v3.mul(v,rb*0.8*Math.sin(t))))));}
+  R.loft(hub,hub2,fill,{center:v3.add(A,v3.mul(n,zO+7))});
+  const m1=lay([Rp*0.55*Math.cos(a),Rp*0.55*Math.sin(a)],1,zO-0.1),m2=lay([(Rp-2*Rp/Z*1.4)*Math.cos(a),(Rp-2*Rp/Z*1.4)*Math.sin(a)],1,zO-0.1);R.line(m1,m2,C.ink,1.2,-0.4);}
+/* round bar (shaft) from a to b */
+function rod3(R,a,b,r,fill,o={}){const ax=v3.norm(v3.sub(b,a));let u=Math.abs(ax[2])<0.9?v3.norm(v3.cross(ax,[0,0,1])):[1,0,0];const v=v3.cross(ax,u);const N=o.n||16;
+  const ring=c=>{const o2=[];for(let i=0;i<N;i++){const t=i/N*TAU;o2.push(v3.add(c,v3.add(v3.mul(u,r*Math.cos(t)),v3.mul(v,r*Math.sin(t)))));}return o2;};R.loft(ring(a),ring(b),fill||C.part,{center:v3.mul(v3.add(a,b),0.5),edge:false});}
+/* box between two points along an axis, cross-section w x h oriented by up vector */
+function block3(R,c,ax,up,L,w,h,fill){ax=v3.norm(ax);up=v3.norm(v3.sub(up,v3.mul(ax,v3.dot(up,ax))));const sd=v3.cross(ax,up);const q=(x,y,z)=>v3.add(c,v3.add(v3.mul(ax,x),v3.add(v3.mul(sd,y),v3.mul(up,z))));
+  const a=[q(-L/2,-w/2,-h/2),q(-L/2,w/2,-h/2),q(-L/2,w/2,h/2),q(-L/2,-w/2,h/2)],b=[q(L/2,-w/2,-h/2),q(L/2,w/2,-h/2),q(L/2,w/2,h/2),q(L/2,-w/2,h/2)];R.loft(a,b,fill,{center:c,edge:true});}
+/* extruded 2D shape in frame F from z0 to z1 */
+function prism3(R,F,pts2,z0,z1,fill,o={}){R.loft(pts2.map(p=>F.at(p[0],p[1],z1)),pts2.map(p=>F.at(p[0],p[1],z0)),fill,Object.assign({center:F.at(0,0,(z0+z1)/2)},o));}
+function ringPts(r,n=40,a0=0){const o=[];for(let i=0;i<n;i++){const t=a0+i/n*TAU;o.push([r*Math.cos(t),r*Math.sin(t)]);}return o;}
+
+/* ================= audit pass · gears drawn as shaded solids (25, 26, 29, 40–44, 50) ================= */
+const CAMG={yaw:-0.62,pitch:0.42,sc:1,cx:400,cy:270};
+function solidSim(num,o){return reg(Object.assign({num,params:o.params||[],outLabel:o.outLabel||'Driven gear, turns',
+  update(phi){this.g={phi};},output(){return o.out(this.g.phi,this.P);},
+  draw(){const R=R3(Object.assign({},CAMG,o.cam||{}));o.scene(R,this.g.phi,this.P,this);R.draw();if(o.note)label(o.note,400,505,'center');if(o.labels)o.labels(R.P,this.g.phi,this.P);}},o.extra||{}));}
+/* 25 bevel gears for shafts at right angles */
+solidSim(25,{note:'BEVEL GEARS · the pitch cones share one apex where the shafts meet',params:[{id:'z',label:'Driven teeth',min:16,max:40,step:4,value:28,fmt:v=>`${v} (driver 20)`}],
+  out:(phi,P)=>-phi*20/P.z/TAU,cam:{cx:380,cy:250,yaw:-0.7,pitch:0.45},
+  scene(R,phi,P){const Z1=20,Z2=P.z,m=6,R1=m*Z1/2,R2=m*Z2/2,d1=Math.atan2(Z1,Z2),d2=PI/2-d1,O=[0,0,0];
+    bevel3(R,O,[0,0,-1],[1,0,0],R1,Z1,d1,26,phi,C['brass-fill']);bevel3(R,O,[1,0,0],[0,0,-1],R2,Z2,d2,26,-phi*Z1/Z2+PI/Z2,C['steel-fill']);
+    const L1=R1/Math.tan(d1),L2=R2/Math.tan(d2);rod3(R,[0,0,-L1-10],[0,0,-L1-170],7,C.part);rod3(R,[L2+10,0,0],[L2+190,0,0],7,C.part);},
+  labels(P){const a=P([0,0,-200]),b=P([300,0,0]);label('DRIVER',a[0]+14,a[1]);label('DRIVEN',b[0]-30,b[1]+22);},
+  extra:{reads(v){return[['Ratio',`20 : ${this.P.z}`],['Shaft angle','90°'],['Driven',rpmOf(Math.abs(v))]];}}});
+/* 26 crown wheel and pinion */
+solidSim(26,{note:'CROWN WHEEL · teeth stand on the face of the wheel; the spur pinion meshes with them at the rim',outLabel:'Crown wheel, turns',
+  out:phi=>phi*12/48/TAU,cam:{cx:400,cy:300,yaw:-0.5,pitch:0.55},
+  scene(R,phi){const Zc=48,Zp=12,Rc=150,m=2*PI*Rc/Zc/PI,Rp=m*Zp/2,ac=phi*Zp/Zc,H=18,th=14;
+    const F=fr3([0,0,0],[1,0,0],[0,1,0]);prism3(R,F,ringPts(Rc+22,64),-10,0,C['steel-fill'],{edge:false});prism3(R,F,ringPts(Rc-26,48),-10,0.5,C['steel-fill'],{caps:true});
+    for(let k=0;k<Zc;k++){const t=ac+k*TAU/Zc,hw=PI*m/4;/* trapezoid tooth, radial prism */const c=Math.cos(t),s=Math.sin(t),tx=[-s,c,0],rad=[c,s,0];
+      const q=(r,x,z)=>[rad[0]*r+tx[0]*x,rad[1]*r+tx[1]*x,z];const prof=[[-hw-0.364*H*0.5,0],[hw+0.364*H*0.5,0],[hw-0.364*H*0.5,H],[-hw+0.364*H*0.5,H]];
+      R.loft(prof.map(p=>q(Rc-22,p[0],p[1])),prof.map(p=>q(Rc+20,p[0],p[1])),C['steel-fill'],{edge:false});}
+    const Fp=fr3([Rc,0,H/2+Rp],[0,0,-1],[0,1,0]);gear3(R,Fp,Rp,Zp,th*2,phi+PI/Zp,C['brass-fill']);rod3(R,[Rc-th-6,0,H/2+Rp],[Rc-th-200,0,H/2+Rp],6,C.part);rod3(R,[0,0,-12],[0,0,-140],8,C.part);},
+  extra:{reads(v){return[['Ratio','12 : 48'],['Shafts','at right angles'],['Crown wheel',rpmOf(Math.abs(v))]];}}});
+/* 29 spiral (scroll) on a disk face driving a spur wheel one tooth per turn */
+solidSim(29,{note:'SPIRAL ON THE DISK FACE · each turn of the disk pushes the wheel on by one tooth',outLabel:'Wheel, turns',
+  out:phi=>phi/18/TAU,cam:{cx:380,cy:300,yaw:-0.45,pitch:0.62},
+  scene(R,phi){const Zw=18,p=26,Rw=p*Zw/(2*PI),r0=40,turns=5,Rd=r0+p*turns+14,rc=r0+p*3.5;
+    const F=fr3([0,0,0],[1,0,0],[0,1,0]);prism3(R,F,ringPts(Rd,72),-16,0,C['brass-fill']);
+    /* raised spiral thread, drawn as short ribbon faces */const N=turns*70,hw=p*0.24,h=9;
+    for(let i=0;i<N;i++){const s0=i/N*turns*TAU,s1=(i+1)/N*turns*TAU,P0=s=>{const r=r0+p*s/TAU,t=s+phi;return[r,t];};
+      const [ra,ta]=P0(s0),[rb,tb]=P0(s1);const pt=(r,t,z)=>[r*Math.cos(t),r*Math.sin(t),z];
+      R.face([pt(ra-hw,ta,h),pt(ra+hw,ta,h),pt(rb+hw,tb,h),pt(rb-hw,tb,h)],C['brass-fill'],{edge:false});R.face([pt(ra+hw,ta,0),pt(rb+hw,tb,0),pt(rb+hw,tb,h),pt(ra+hw,ta,h)],shade(C['brass-fill'],0.85),{});R.face([pt(ra-hw,ta,0),pt(rb-hw,tb,0),pt(rb-hw,tb,h),pt(ra-hw,ta,h)],shade(C['brass-fill'],0.85),{});}
+    const Fw=fr3([rc,0,h*0.5+Rw],[0,0,-1],[-1,0,0]);gear3(R,Fw,Rw,Zw,16,phi/Zw,C['steel-fill']);rod3(R,[rc,9,h*0.5+Rw],[rc,170,h*0.5+Rw],6,C.part);rod3(R,[0,0,-16],[0,0,-150],8,C.part);},
+  extra:{reads(v){return[['Ratio','18 : 1 (one tooth per turn)'],['Shafts','at right angles'],['Wheel',rpmOf(Math.abs(v))]];}}});
+/* 40 oblique (helical) teeth, 41 V-shaped (herringbone) teeth */
+function helicalPair(num,herring,note){solidSim(num,{note,cam:{cx:400,cy:260,yaw:-0.35,pitch:0.62},out:phi=>-phi*16/24/TAU,
+  scene(R,phi){const m=7,Z1=16,Z2=24,R1=m*Z1/2,R2=m*Z2/2,w=46,beta=0.45,t1=w*Math.tan(beta)/R1,t2=w*Math.tan(beta)/R2;
+    const F1=fr3([-R2*0.6,0,0],[1,0,0],[0,1,0]),F2=fr3([-R2*0.6+R1+R2,0,0],[1,0,0],[0,1,0]);
+    gear3(R,F1,R1,Z1,w,phi,C['brass-fill'],{twist:herring?t1:t1,herring,seg:herring?6:5});gear3(R,F2,R2,Z2,w,-phi*Z1/Z2+PI+PI/Z2,C['steel-fill'],{twist:herring?-t2:-t2,herring,seg:herring?6:5});
+    rod3(R,F1.at(0,0,w/2),F1.at(0,0,w/2+70),6,C.part);rod3(R,F2.at(0,0,w/2),F2.at(0,0,w/2+70),7,C.part);},
+  extra:{reads(v){return[['Ratio','16 : 24'],['Teeth',herring?'V-shaped (herringbone): the side thrusts cancel':'oblique (helical): several teeth always in contact'],['Driven',rpmOf(Math.abs(v))]];}}});}
+helicalPair(40,false,'OBLIQUE TEETH · each tooth comes into contact gradually, so the drive runs smoothly');
+helicalPair(41,true,'V-SHAPED TEETH · smooth like oblique teeth, with no end thrust on the shafts');
+/* 42 bevel gears for shafts at an oblique angle */
+solidSim(42,{note:'ANGLE BEVELS · shafts meet at 60°; the pitch cones still share one apex',cam:{cx:360,cy:230,yaw:-0.75,pitch:0.4},out:phi=>-phi*18/27/TAU,
+  scene(R,phi){const Z1=18,Z2=27,m=6,R1=m*Z1/2,R2=m*Z2/2,S=PI/3,d1=Math.atan2(Math.sin(S),Z2/Z1+Math.cos(S)),d2=S-d1;
+    const n1=[0,0,-1],n2=[Math.sin(S),0,-Math.cos(S)];const c1=v3.norm(v3.add(n1,n2));
+    bevel3(R,[0,0,0],n1,[1,0,0],R1,Z1,d1,24,phi,C['brass-fill']);bevel3(R,[0,0,0],n2,[-Math.cos(S),0,-Math.sin(S)].map(v=>-v),R2,Z2,d2,24,-phi*Z1/Z2+PI/Z2,C['steel-fill']);
+    const L1=R1/Math.tan(d1),L2=R2/Math.tan(d2);rod3(R,v3.mul(n1,L1+12),v3.mul(n1,L1+160),7,C.part);rod3(R,v3.mul(n2,L2+12),v3.mul(n2,L2+170),7,C.part);},
+  extra:{reads(v){return[['Shaft angle','60°'],['Ratio','18 : 27'],['Driven',rpmOf(Math.abs(v))]];}}});
+/* 43 skew (crossed oblique-toothed) gears for shafts that do not meet */
+solidSim(43,{note:'SKEW GEARS · oblique teeth let gears drive between shafts that cross without meeting',cam:{cx:400,cy:270,yaw:-0.55,pitch:0.5},out:phi=>-phi*14/20/TAU,
+  scene(R,phi){const m=7,Z1=14,Z2=20,R1=m*Z1/2/Math.cos(PI/4),R2=m*Z2/2/Math.cos(PI/4),w=34;
+    const F1=fr3([0,0,0],[1,0,0],[0,1,0]),F2=fr3([0,R1+R2,0],[0,0,1],[0,1,0]);/* second axis along x */
+    gear3(R,F1,R1,Z1,w,phi,C['brass-fill'],{twist:w/R1,seg:5});gear3(R,F2,R2,Z2,w,-phi*Z1/Z2+PI/Z2,C['steel-fill'],{twist:w/R2,seg:5});
+    rod3(R,F1.at(0,0,w/2),F1.at(0,0,w/2+80),6,C.part);rod3(R,F1.at(0,0,-w/2),F1.at(0,0,-w/2-60),6,C.part);rod3(R,F2.at(0,0,w/2),F2.at(0,0,w/2+90),7,C.part);rod3(R,F2.at(0,0,-w/2),F2.at(0,0,-w/2-90),7,C.part);},
+  extra:{reads(v){return[['Shafts','at right angles, not meeting'],['Teeth','set at 45° on both gears'],['Driven',rpmOf(Math.abs(v))]];}}});
+/* 44 stepped gears: several thin gears side by side, each set on by part of a tooth */
+solidSim(44,{note:'STEPPED GEARS · three layers each set on by a third of a tooth: always one tooth at its best contact',cam:{cx:400,cy:260,yaw:-0.3,pitch:0.6},out:phi=>-phi*16/24/TAU,
+  scene(R,phi){const m=7,Z1=16,Z2=24,R1=m*Z1/2,R2=m*Z2/2,w=14,n=3;for(let k=0;k<n;k++){const z=(k-(n-1)/2)*w;
+      gear3(R,fr3([-R2*0.6,0,z],[1,0,0],[0,1,0]),R1,Z1,w,phi+k*TAU/Z1/n,C['brass-fill'],{mark:k===n-1});gear3(R,fr3([-R2*0.6+R1+R2,0,z],[1,0,0],[0,1,0]),R2,Z2,w,-(phi+k*TAU/Z1/n)*Z1/Z2+PI+PI/Z2,C['steel-fill'],{mark:k===n-1});}
+    rod3(R,[-R2*0.6,0,n*w/2],[-R2*0.6,0,n*w/2+60],6,C.part);rod3(R,[-R2*0.6+R1+R2,0,n*w/2],[-R2*0.6+R1+R2,0,n*w/2+60],7,C.part);},
+  extra:{reads(v){return[['Layers','3, each set on by ⅓ tooth'],['Ratio','16 : 24'],['Driven',rpmOf(Math.abs(v))]];}}});
+/* 50 universal (Hooke's) joint */
+reg({num:50,outLabel:'Output angle − input angle, °',params:[{id:'b',label:'Shaft angle',min:0,max:45,step:5,value:30,fmt:v=>v+'°'}],
+  update(phi){const b=this.P.b*PI/180;const a1=phi;/* output angle from the cross geometry */const a2=Math.atan2(Math.sin(a1),Math.cos(a1)*Math.cos(b));const k=Math.round((a1-a2)/TAU);this.g={phi,b,a1,a2:a2+k*TAU};},
+  output(){return(this.g.a2-this.g.a1)*180/PI;},
+  draw(){const g=this.g,R=R3({yaw:-0.5,pitch:0.32,sc:1,cx:400,cy:270});const ax1=[1,0,0],ax2=[Math.cos(g.b),Math.sin(g.b),0];
+    /* input yoke pin axis e1 ⟂ x, turning with a1; cross arm e2 ⟂ e1 and ⟂ output axis */
+    const e1=[0,Math.cos(g.a1),Math.sin(g.a1)],e2=v3.norm(v3.cross(ax2,e1));const Rk=46,arm=40;
+    rod3(R,[-300,0,0],[-70,0,0],11,C['brass-fill']);rod3(R,v3.mul(ax2,70),v3.mul(ax2,300),11,C['steel-fill']);
+    const yoke=(ax,e,fill,sgn)=>{block3(R,v3.mul(ax,sgn*62),e,ax,Rk*2+22,24,16,fill);
+      for(const s of [1,-1]){const c=v3.add(v3.mul(e,s*Rk),v3.mul(ax,sgn*30));block3(R,c,ax,e,64,22,12,fill);}};
+    yoke(ax1,e1,C['brass-fill'],-1);yoke(ax2,e2,C['steel-fill'],1);
+    rod3(R,v3.mul(e1,-arm-6),v3.mul(e1,arm+6),7,C.part2);rod3(R,v3.mul(e2,-arm-6),v3.mul(e2,arm+6),7,C.part2);block3(R,[0,0,0],e1,e2,20,20,20,C.part2);
+    /* marks on the shafts so the uneven speed shows */R.line(v3.add([-200,0,0],v3.mul(e1,11)),v3.add([-120,0,0],v3.mul(e1,11)),C.ink,2.2,-20);R.line(v3.add(v3.mul(ax2,140),v3.mul(e2,11)),v3.add(v3.mul(ax2,220),v3.mul(e2,11)),C.ink,2.2,-20);
+    R.draw();label('INPUT · steady',150,430);label('OUTPUT · speeds up and slows down twice a turn',470,470);},
+  reads(v){const g=this.g,c=Math.cos(g.b),s=Math.sin(g.a1);const k=c/(1-s*s*(1-c*c));return[['Shaft angle',`${this.P.b}°`],['Output speed now',`${k.toFixed(3)} × input`],['Range',`${c.toFixed(3)} – ${(1/c).toFixed(3)} × input`],['Lead / lag',`${((g.a2-g.a1)*180/PI).toFixed(1)}°`]];}});
+
+/* ================= audit pass · non-circular toothed gears (30, 33, 35, 38, 209) and fixes 25–50 ================= */
+/* closed pitch curve from a local polar radius rf(s); arc-length table so teeth are spaced evenly along the curve */
+const _ptc={};
+function pitchCurve(rf,key,Z){if(key&&_ptc[key])return _ptc[key];const M=2400,P=[],A=[0];for(let i=0;i<M;i++){const s=i/M*TAU,r=rf(s);P.push([r*Math.cos(s),r*Math.sin(s)]);}
+  for(let i=1;i<=M;i++){const a=P[i-1],b=P[i%M];A.push(A[i-1]+Math.hypot(b[0]-a[0],b[1]-a[1]));}
+  const L=A[M],res={P,A,L,M,Z,p:L/Z,
+    arcAt(s){const x=mod(s,TAU)/TAU*M,i=Math.floor(x);return A[i]+(A[i+1]-A[i])*(x-i);},
+    at(a){a=mod(a,L);let lo=0,hi=M;while(hi-lo>1){const m=(lo+hi)>>1;if(A[m]<=a)lo=m;else hi=m;}const f=(a-A[lo])/((A[lo+1]-A[lo])||1),p0=P[lo],p1=P[(lo+1)%M];return[p0[0]+(p1[0]-p0[0])*f,p0[1]+(p1[1]-p0[1])*f,p1[0]-p0[0],p1[1]-p0[1]];}};
+  if(key)_ptc[key]=res;return res;}
+/* toothed outline (local): tooth centres at arc = phase + k·p */
+function toothedCurve(pc,phase,o={}){const n=o.per||20,N=pc.Z*n,m=pc.p/PI,ad=m*(o.add??1),de=-m*(o.ded??1.2),out=[];
+  for(let i=0;i<N;i++){const q=pc.at(phase+i/N*pc.L),tl=Math.hypot(q[2],q[3])||1,u=Math.abs(mod(i/n+0.5,1)-0.5);
+    const h=u<0.15?ad:u>0.35?de:ad+(de-ad)*(u-0.15)/0.2;out.push([q[0]+q[3]/tl*h,q[1]-q[2]/tl*h]);}return out;}
+/* draw a toothed non-circular gear turned by th (world = local + th) */
+function ncGear(cx,cy,pc,phase,th,fill,o={}){const c=Math.cos(th),s=Math.sin(th),tr=([x,y])=>[cx+x*c-y*s,cy+x*s+y*c];
+  poly(toothedCurve(pc,phase,o).map(tr));ctx.closePath();circ(cx,cy,o.bore||7,false);paint(fill,C.ink,1.1);
+  ctx.save();ctx.setLineDash([3,4]);ctx.strokeStyle=C.muted;ctx.lineWidth=0.8;poly(pc.P.filter((_,i)=>i%8===0).map(tr));ctx.closePath();ctx.stroke();ctx.restore();
+  if(o.mark!==false){const q=tr([pc.P[0][0]*0.55,pc.P[0][1]*0.55]);bar(cx,cy,q[0],q[1],5,C.part2);}pivot(cx,cy,5);}
+/* gear pair helper: phases so a tooth of A meets a space of B at the contact point.
+   sA, sB = local angles of the contact point on A and B at the reference pose */
+function ncPhase(pcA,pcB,sA,sB){return pcA.arcAt(sA)+pcB.arcAt(sB)-pcB.p/2;}
+
+/* 33 · two equal elliptical gears turning about their foci; foci 2a apart, so r1 + r2 = 2a at the contact point */
+Object.assign(SIMS_NEW[33],{draw(){const g=this.g,e=this.P.e,a=this.a,rf=s=>a*(1-e*e)/(1+e*Math.cos(s));const pc=pitchCurve(rf,'e33_'+e,31);
+  const F1=[310,262],F2=[310+2*a,262];ncGear(F1[0],F1[1],pc,0,g.phi,C['brass-fill']);ncGear(F2[0],F2[1],pc,ncPhase(pc,pc,0,PI),g.a2,C['steel-fill']);
+  label('ELLIPTICAL GEARS · each turns about a focus; the foci are one major axis apart',400,470,'center');}});
+/* 36 · Brown: a single row of teeth; the pinion works outside the row one way and inside it the other way, its shaft rising and falling in a slot */
+{const m=SIMS_NEW[36];}
+/* 45 · grooved friction gearing: add the enlarged cross-section Brown shows */
+{const m=SIMS_NEW[45],d0=m.draw;m.draw=function(){d0.call(this);const x0=575,y0=330,w=170,n=5,pw=w/n,ym=y0+55,h=14;ctx.save();ctx.fillStyle=C.sheet;ctx.strokeStyle=C.muted;ctx.lineWidth=1;ctx.beginPath();ctx.rect(x0-10,y0,w+20,112);ctx.fill();ctx.stroke();ctx.restore();
+  const zig=(sgn)=>{const pts=[];for(let k=0;k<=n;k++){const xa=x0+k*pw;pts.push([xa,ym+sgn*h/2]);if(k<n)pts.push([xa+pw/2,ym-sgn*h/2]);}return pts;};
+  const lo=zig(1),up=zig(1).map(p=>[p[0],p[1]-2]);poly([...lo,[x0+w,y0+92],[x0,y0+92]]);ctx.closePath();paint(C['brass-fill'],C.ink,1);poly([...up,[x0+w,y0+14],[x0,y0+14]]);ctx.closePath();paint(C['steel-fill'],C.ink,1);
+  label('SECTION · V ridges wedge into V grooves',x0+w/2,y0+106,'center');};}
+/* 49 · Brown: a horizontal shaft rocked to and fro carries two loose bevel wheels, each with a pawl on an opposed ratchet fast on the shaft; both mesh one bevel on the vertical shaft, which turns continuously */
+reg({num:49,outLabel:'Vertical shaft, turns',
+  reset(){this.w=0;this.last=null;},
+  update(phi){const a=0.55*Math.sin(phi);if(this.last===null)this.last=a;const d=a-this.last;this.last=a;this.w+=Math.abs(d);this.g={phi,a,d,w:this.w};},
+  output(){return this.w/TAU;},
+  draw(){const g=this.g,R=R3({yaw:-0.42,pitch:0.42,sc:1.05,cx:400,cy:255}),Z=20,Rp=60,dd=PI/4,bL=g.w,bR=-g.w;
+    rod3(R,[-260,0,0],[260,0,0],8,C.part);
+    bevel3(R,[0,0,0],[-1,0,0],[0,0,1],Rp,Z,dd,30,bL,C['steel-fill'],{boss:12});bevel3(R,[0,0,0],[1,0,0],[0,0,1],Rp,Z,dd,30,bR+PI/Z,C['steel-fill'],{boss:12});
+    bevel3(R,[0,0,0],[0,0,1],[1,0,0],Rp,Z,dd,30,-g.w+PI/Z,C['brass-fill'],{boss:10});rod3(R,[0,0,72],[0,0,210],8,C.part);
+    const saw=(sgn)=>{const pts=[];const n=14;for(let k=0;k<n;k++){const t0=k*TAU/n,t1=(k+1)*TAU/n;pts.push([46*Math.cos(t0),46*Math.sin(t0)],[56*Math.cos(t1-0.02),56*Math.sin(t1-0.02)]);}return sgn>0?pts:pts.map(p=>[p[0],-p[1]]).reverse();};
+    for(const s of [-1,1]){const x=s*90;const F=fr3([x,0,0],[0,Math.cos(g.a),Math.sin(g.a)],[0,-Math.sin(g.a),Math.cos(g.a)]);prism3(R,F,saw(s),-6,6,C['brass-fill'],{edge:true});
+      const b=s<0?bL:bR+PI/Z,pd=[0,Math.cos(b+0.6),Math.sin(b+0.6)];block3(R,v3.add([s*76,0,0],v3.mul(pd,52)),[0,-pd[2],pd[1]],[1,0,0],22,8,8,C.part2);}
+    const hand=[-250,0,0],ha=g.a;block3(R,v3.add(hand,[0,-Math.sin(ha)*50,Math.cos(ha)*50]),[0,-Math.sin(ha),Math.cos(ha)],[1,0,0],100,14,10,C['brass-fill']);
+    R.draw();label('ROCKED TO AND FRO',95,135);label('VERTICAL SHAFT · turns one way, both strokes',470,60);label('TWO LOOSE BEVELS, OPPOSED RATCHETS',400,480,'center');},
+  reads(){const g=this.g;return[['Input','rocks to and fro'],['Driving now',g.d>0?'left bevel (its pawl grips)':g.d<0?'right bevel (its pawl grips)':'—'],['Vertical shaft',`${(this.w/TAU).toFixed(2)} turns, one way`]];}});
+/* 37 · Brown: a bevel pinion whose teeth run the whole width of its face drives studs set spirally on the wheel; the pinion stays put, the studs meet it at a changing radius */
+Object.assign(SIMS_NEW[37],{draw(){const g=this.g,O=[330,265];circ(O[0],O[1],185);paint(C['brass-fill'],C.ink);
+  for(let i=0;i<=60;i++){const m=i/60*TAU,r=this.r(m),t=m+this.w;circ(O[0]+r*Math.cos(t),O[1]+r*Math.sin(t),5);paint(C.part,C.ink,1);}pivot(O[0],O[1],6);
+  const x0=O[0]+50,x1=O[0]+180;ctx.beginPath();ctx.rect(x0,O[1]-16,x1-x0,32);paint(C['steel-fill'],C.ink);ctx.save();ctx.beginPath();ctx.rect(x0,O[1]-16,x1-x0,32);ctx.clip();ctx.strokeStyle=C.ink;ctx.lineWidth=1;
+  for(let k=0;k<10;k++){const a=-g.phi+k*TAU/10,s=Math.sin(a);if(Math.cos(a)<0)continue;ctx.beginPath();ctx.moveTo(x0,O[1]+16*s);ctx.lineTo(x1,O[1]+16*s);ctx.stroke();}ctx.restore();
+  bar(x1,O[1],760,O[1],10,C.part);circ(O[0]+g.r,O[1],8);paint(null,C.hi,2.2);label('LONG-TOOTHED PINION · stays put; the studs meet it nearer or farther out',400,480,'center');}});
+/* 46 · elevation with both axes upright: the chain leaves the fusee at a small radius while the spring is strong and at a large radius as it weakens */
+Object.assign(SIMS_NEW[46],{draw(){const g=this.g,B=[230,265],Rb=72,F=[560,265],y0=150,y1=380,rt=22,rb=70,yc=y0+(y1-y0)*g.p,rc=rt+(rb-rt)*g.p;
+  ctx.beginPath();ctx.rect(B[0]-Rb,B[1]-60,2*Rb,120);paint(C['brass-fill'],C.ink);ctx.beginPath();ctx.rect(B[0]-Rb-6,B[1]-66,2*Rb+12,8);ctx.rect(B[0]-Rb-6,B[1]+58,2*Rb+12,8);paint(C.part,C.ink);
+  const nb=Math.round(g.p*10);ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=2;for(let k=0;k<nb;k++){const y=B[1]-52+k*10.5;ctx.beginPath();ctx.moveTo(B[0]-Rb,y);ctx.lineTo(B[0]+Rb,y+3);ctx.stroke();}ctx.restore();
+  bar(B[0],B[1]-110,B[0],B[1]+110,10,C.part);
+  poly([[F[0]-rt,y0],[F[0]+rt,y0],[F[0]+rb,y1],[F[0]-rb,y1]]);ctx.closePath();paint(C['steel-fill'],C.ink);
+  ctx.save();ctx.strokeStyle=C.ink;for(let y=y0+6;y<y1;y+=9){const r=rt+(rb-rt)*(y-y0)/(y1-y0);ctx.lineWidth=y>yc?2.2:0.6;ctx.globalAlpha=y>yc?1:0.5;ctx.beginPath();ctx.moveTo(F[0]-r,y);ctx.lineTo(F[0]+r,y+3);ctx.stroke();}ctx.restore();
+  bar(F[0],y0-50,F[0],y1+40,10,C.part);rope([[B[0]+Rb,yc],[F[0]-rc,yc]]);circ(F[0]-rc,yc,4);paint(C.hi,C.ink);
+  label('BARREL · mainspring inside',B[0],B[1]+150,'center');label('FUSEE',F[0],y1+70,'center');label('CHAIN',(B[0]+Rb+F[0]-rc)/2,yc-12,'center');}});
+
 const ALL=Object.assign({119:M119,120:M120,121:M121,122:M122,123:M123,124:M124,127:M127},SIMS_NEW);
 for(const k in ALL){const m=ALL[k];m.params=m.params||[];m.P={};m.params.forEach(p=>m.P[p.id]=p.value);if(!m.reset)m.reset=function(){};}
-window.MB={SIMS:ALL,C,setCtx(c){ctx=c;},setDir(d){DIR=d||1;},W,H,ropeThru,tanLine,cam3,circ3};
+window.MB={SIMS:ALL,C,setCtx(c){ctx=c;},setDir(d){DIR=d||1;},W,H,ropeThru,tanLine,cam3,circ3,pitchCurve,toothedCurve,ncPhase};
 })();
