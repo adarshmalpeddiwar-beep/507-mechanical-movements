@@ -113,7 +113,6 @@ camFlat(136,{r:t=>90+30*Math.sin(t)+12*Math.sin(3*t),label:'SHAPED RIM GIVES THE
 camFlat(149,{r:t=>85+35*Math.max(0,Math.sin(t))**2,label:'CAM WORKS THE ROD THROUGH LEVERS',concept:true});
 camFlat(150,{params:[{id:'k',type:'toggle',label:'Cam fitted',options:[[0,'Short'],[1,'Medium'],[2,'Long']],value:1}],set:[0,1,2].map(k=>shapePts(t=>80+(15+15*k)*Math.max(0,Math.cos(t)))),label:'CHANGE THE CAM TO CHANGE THE VALVE TRAVEL',reads(){return[['Cam',['short','medium','long'][this.P.k]],['Travel',`${15+15*this.P.k} mm`]];}});
 camFlat(88,{r:t=>{const u=mod(t,TAU);return u<PI?110:110-60*Math.sin(u-PI);},label:'STOPS ON THE ECCENTRIC DISK · intermittent motion',concept:true});
-camFlat(166,{r:t=>{const u=mod(t,TAU)/TAU;return 70+50*(u<0.3?smooth(u/0.3):u<0.5?1:u<0.8?1-smooth((u-0.5)/0.3):0);},label:'PAUSE AT EACH END OF THE STROKE'});
 camFlat(286,{r:t=>{const u=mod(t,TAU);return u<1.2?60+60*Math.sin(u/1.2*PI):60;},label:'CURVED TOE LIFTS THE VALVE ROD',concept:true});
 camFlat(130,{r:t=>80+40*smooth((Math.cos(t)+1)/2),label:'CAM CLOSES THE SHEARS, WEIGHT OPENS THEM',concept:true,
   post(O,g){const a=-0.6+g.hy/200;bar(O[0]-160,O[1]-200,O[0]+180,O[1]-200+340*Math.sin(a)*0.3,10,C['steel-fill']);pivot(O[0]-160,O[1]-200,5);}});

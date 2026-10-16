@@ -39,4 +39,5 @@ fix them with attention to detail, and give EVERY mechanism a 3D-printable model
 - 81–115: 2D fixed (81 rack teeth, 82 one ratchet two treadles, 94 spiral/slot plates, 98 groove in the arm, 115 rack pitch, 84/139 rack frame pitch, screwSlide travels back and forth). Models in cad_models_081.js.
 - 116–150: 2D fixed 143 (worm on sliding frame). Models in cad_models_116.js incl. M119–M127 and generic link models (PK.Lib.linkModel) for all link() sims, governors (govModel in 116 chunk).
 - PK.Lib (cad_pk.js): pxPoly, offsetLoop, pip, groovedPlate, camFlatModel(n,summary), linkModel(n,summary). Use them from any chunk.
-- Next: 151+ (cad_models_151.js).
+- 151–190: 2D fixed 153/154 (stud contact), 166 (slotted rod dwell). Models in cad_models_151.js. TODO: 171 is an alias of 344 — give 171 the same model when 344 is modelled.
+- Next: 191+ (cad_models_191.js).

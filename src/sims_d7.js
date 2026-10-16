@@ -54,3 +54,35 @@ reg({num:143,outLabel:'Frame position, mm',Zw:16,F:[700,300],L:250,r:70,
     stripeShaft(40,760,yw,7,g.phi,C.part);const P=[C0[0]+this.r*Math.cos(g.w),C0[1]+this.r*Math.sin(g.w)];bar(P[0],P[1],this.F[0],this.F[1],10,C['brass-fill']);circ(P[0],P[1],7);paint(C.part,C.ink);pivot(this.F[0],this.F[1],6);ground(this.F[0],this.F[1]+12,40);
     for(const x of [120,560]){ctx.beginPath();ctx.rect(x,yw+52,80,10);paint(C.part2,C.ink);}label('WORM AND WHEEL RIDE ON THE SLIDING FRAME · the rod to a fixed pin makes it traverse',400,500,'center');},
   reads(){return[['Frame',`${this.g.x.toFixed(0)} mm`],['Traverse','back and forth once per wheel turn']];}});
+/* stud pushing an arm: returns the extra angle (from rest) the arm must turn so the stud just touches it */
+function studPush(F,base,La,P,gap,sg){const dx=P[0]-F[0],dy=P[1]-F[1],d=Math.hypot(dx,dy);if(d>La||d<gap)return 0;const psi=Math.atan2(dy,dx);let a=mod(psi-sg*Math.asin(gap/d)-base+PI,TAU)-PI;return sg>0?Math.max(0,a):Math.min(0,a);}
+/* 154 · studs on the disk press one arm of a bell crank; a weighted cord on the other arm pulls it back */
+reg({num:154,outLabel:'Cord pull, mm',O:[280,300],F:[440,180],
+  update(phi){const O=this.O,F=this.F,base=PI*0.66;let a=0;for(let k=0;k<3;k++){const t=phi+k*TAU/3,P=[O[0]+85*Math.cos(t),O[1]+85*Math.sin(t)];const v=studPush(F,base,128,P,16,-1);if(v<a)a=v;}this.g={phi,a:-a};},
+  output(){return this.g.a*140;},
+  draw(){const g=this.g,O=this.O,F=this.F;circ(O[0],O[1],100);paint(C['brass-fill'],C.ink);for(let k=0;k<3;k++){const t=g.phi+k*TAU/3;circ(O[0]+85*Math.cos(t),O[1]+85*Math.sin(t),10);paint(C.part2,C.ink);}pivot(O[0],O[1],6);
+    const a=-g.a,A1=[F[0]+128*Math.cos(PI*0.66+a),F[1]+128*Math.sin(PI*0.66+a)],A2=[F[0]+140*Math.cos(-0.1+a),F[1]+140*Math.sin(-0.1+a)];bar(F[0],F[1],A1[0],A1[1],12,C['steel-fill']);bar(F[0],F[1],A2[0],A2[1],12,C['steel-fill']);pivot(F[0],F[1],6);
+    const Pp=[A2[0]+40,90];pulley(Pp[0]+10,Pp[1],18,0,C.part);rope([[A2[0],A2[1]],[Pp[0]-8,Pp[1]],[Pp[0]+28,Pp[1]],[Pp[0]+28,300+g.a*140]]);weight(Pp[0]+28,300+g.a*140,44,36,'');
+    label('A STUD PRESSES THE ARM · the weighted cord pulls it back',400,480,'center');},
+  reads(){return[['Cord pull',`${(this.g.a*140).toFixed(0)} mm`],['Strokes per turn','3']];}});
+/* 153 · studs push the bar out by a tab beneath it; a bell crank brings it back */
+reg({num:153,outLabel:'Bar position, mm',O:[300,280],
+  update(phi){const O=this.O;let x=0;for(let k=0;k<4;k++){const t=phi+k*PI/2,c=Math.cos(t),s=Math.sin(t);if(c>0&&Math.abs(95*s)<22)x=Math.max(x,95*c+10-60);}this.g={phi,x:Math.max(0,x)};},
+  output(){return this.g.x;},
+  draw(){const g=this.g,O=this.O;circ(O[0],O[1],110);paint(C['brass-fill'],C.ink);for(let k=0;k<4;k++){const t=g.phi+k*PI/2;circ(O[0]+95*Math.cos(t),O[1]+95*Math.sin(t),10);paint(C.part2,C.ink);}pivot(O[0],O[1],6);
+    const X=O[0]+60+g.x;ctx.beginPath();ctx.rect(X,O[1]-50,220,24);paint(C['steel-fill'],C.ink);ctx.beginPath();ctx.rect(X,O[1]-26,14,44);paint(C['steel-fill'],C.ink);
+    const F=[O[0]+340,O[1]-110],a=g.x/120;bar(F[0],F[1],F[0]-60*Math.cos(a)+0,F[1]+60,8,C.part);bar(F[0],F[1],F[0]+70,F[1]-20,8,C.part);pivot(F[0],F[1],5);
+    for(const gx of [520,640]){ctx.beginPath();ctx.rect(gx,O[1]-62,40,8);ctx.rect(gx,O[1]-22,40,8);paint(C.part2,C.ink);}
+    label('STUDS PUSH THE TAB · THE BELL CRANK RETURNS THE BAR',400,480,'center');},
+  reads(){return[['Bar',`${this.g.x.toFixed(0)} mm`],['Pushes per turn','4']];}});
+/* 166 · a slot in the connecting rod lets it rest at each end of the stroke while the crank keeps turning (brick-press mould) */
+reg({num:166,outLabel:'Mould position, mm',O:[220,280],r:80,L0:260,s:70,
+  reset(){this.x=null;},
+  update(phi){const p=this.O[0]+this.r*Math.cos(phi);if(this.x===null)this.x=p+this.L0+this.s/2;this.x=Math.min(Math.max(this.x,p+this.L0),p+this.L0+this.s);this.g={phi,x:this.x,p,py:this.O[1]+this.r*Math.sin(phi)};},
+  output(){return this.g.x-(this.O[0]+this.L0+this.s/2);},
+  draw(){const g=this.g,O=this.O,y=O[1];circ(O[0],O[1],this.r+24);paint(C['brass-fill'],C.ink);bar(O[0],O[1],O[0]+this.r*Math.cos(g.phi),g.py,10,C.part2);pivot(O[0],O[1],6);
+    const x0=g.x-this.L0-this.s-14;ctx.beginPath();ctx.rect(x0,y-16,this.L0+this.s+14,32);ctx.rect(x0+8,y-7,this.s+12,14);paint(C['steel-fill'],C.ink);circ(g.p,y,7);paint(C.part,C.ink);
+    ctx.beginPath();ctx.rect(g.x,y-40,120,80);paint(C.part2,C.ink);for(const gx of [g.x+20,g.x+60]){ctx.beginPath();ctx.rect(gx,y-28,30,56);paint(C.sheet,C.ink);}
+    for(const gy of [y-52,y+44]){ctx.beginPath();ctx.rect(440,gy,320,8);paint(C.part,C.ink);}
+    const resting=Math.abs(g.x-(g.p+this.L0))>0.5&&Math.abs(g.x-(g.p+this.L0+this.s))>0.5;label(resting?'PIN TRAVELS IN THE SLOT · the mould rests':'PIN AT THE END OF THE SLOT · the mould moves',400,470,'center');},
+  reads(){return[['Mould',`${this.output().toFixed(0)} mm`],['Rest at each end','while the pin crosses the slot']];}});
