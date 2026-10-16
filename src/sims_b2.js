@@ -136,7 +136,7 @@ function doublePawl(num){return reg({num,outLabel:'Wheel angle, degrees',N:24,
       bar(Cc[0]+150*Math.cos(arm),Cc[1]+150*Math.sin(arm),pv[0],pv[1],8,C['brass-fill']);bar(pv[0],pv[1],Cc[0]+rr*Math.cos(ta),Cc[1]+rr*Math.sin(ta),8,eng?C.part2:C.part);pivot(pv[0],pv[1],4);}
     pivot(Cc[0],Cc[1],6);label('TWO PAWLS · one works on each stroke',Cc[0],Cc[1]+160,'center');},
   reads(){return[['Wheel turned',`${(this.W*180/PI).toFixed(0)}°`],['Strokes used','both'],['Motion','nearly continuous']];}});}
-doublePawl(77);doublePawl(206);doublePawl(236);
+
 
 /* 81 part gear with spring-return rack */
 reg({num:81,outLabel:'Rack position, mm',

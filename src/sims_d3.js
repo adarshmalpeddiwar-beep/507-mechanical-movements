@@ -62,7 +62,7 @@ function gear3(R,F,Rp,Z,w,a,fill,o={}){const tw=o.twist||0,seg=o.seg||(tw?4:1),b
   cap(-w/2);cap(w/2);}
 /* bevel gear: apex A, axis n (pointing from apex to the gear), u in the gear plane; outer pitch radius Rp, cone half-angle d, face width f (along the cone) */
 function bevel3(R,A,n,u,Rp,Z,d,f,a,fill,o={}){n=v3.norm(n);u=v3.norm(v3.sub(u,v3.mul(n,v3.dot(u,n))));const v=v3.cross(n,u);
-  const L=Rp/Math.sin(d),k=(L-f)/L;const outer=gearOutline2(Rp,Z,a),zO=L*Math.cos(d),zI=(L-f)*Math.cos(d);
+  const L=Rp/Math.sin(d),k=(L-f)/L;let outer=gearOutline2(Rp,Z,a);if(o.seg){const rr=Rp-1.25*2*Rp/Z;outer=outer.map(p=>{const t=mod(Math.atan2(p[1],p[0])-a-o.seg[0],TAU);if(t<o.seg[1])return p;const r=Math.min(Math.hypot(p[0],p[1]),rr);const q=Math.atan2(p[1],p[0]);return[r*Math.cos(q),r*Math.sin(q)];});}const zO=L*Math.cos(d),zI=(L-f)*Math.cos(d);
   /* teeth stand on the pitch cone: scale radially about the cone, and tilt the tooth height along the back cone */
   const lay=(p,s,z)=>{const r=Math.hypot(p[0],p[1]),dr=(r-Rp)*s,rr=Rp*s+dr*Math.cos(d),zz=z-dr*Math.sin(d);const t=Math.atan2(p[1],p[0]);return v3.add(A,v3.add(v3.mul(n,zz),v3.add(v3.mul(u,rr*Math.cos(t)),v3.mul(v,rr*Math.sin(t)))));};
   const lo=outer.map(p=>lay(p,1,zO)),li=outer.map(p=>lay(p,k,zI));const ctr=v3.add(A,v3.mul(n,(zO+zI)/2));

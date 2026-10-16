@@ -104,7 +104,7 @@ function build(n,spec,P){S=spec.S||0.3;const R=runner(spec.sim||n,spec.P);spec._
   const M=(spec.margin??10)/S;let pl=spec.plate||{x0:lo[0]-M,y0:lo[1]-M,x1:hi[0]+M,y1:hi[1]+M};spec._plate=pl;
   const pw=(pl.x1-pl.x0)*S,ph=(pl.y1-pl.y0)*S;
   const base=[prism(K.rrect(pw,ph,6,6,(pl.x0+pl.x1)/2*S,-(pl.y0+pl.y1)/2*S),[],0,BT)];
-  for(const gp of spec.ground||[]){const [x,y]=mm(gp);const zb=zl(gp[2])-GAP;if(zb>BT+0.01)base.push(cyl(BOSSR,BT,zb,28,x,y));base.push(cyl(PINR,zb,zl(gp[3])+TH+GAP+CAPH,28,x,y));caps.push({ground:true,x:gp[0],y:gp[1],z:zl(gp[3])+TH+GAP});}
+  for(const gp of spec.ground||[]){const [x,y]=mm(gp);const zb=zl(gp[2])-GAP;if(zb>BT+0.01)base.push(cyl(BOSSR,BT,zb,28,x,y));if(gp[4]===false){base.push(cyl(PINR,zb,zl(gp[3])+TH,28,x,y));}else{base.push(cyl(PINR,zb,zl(gp[3])+TH+GAP+CAPH,28,x,y));caps.push({ground:true,x:gp[0],y:gp[1],z:zl(gp[3])+TH+GAP});}}
   for(const f of spec.fixed||[]){const sh=typeof f.shape==='function'?f.shape(Sh):f.shape;base.push(ext(sh,f.z0??BT,zl(f.l1??0)+(f.t??TH)));}
   parts.unshift({id:'base',name:spec.baseName||'Base plate',role:'frame',mesh:merge(...base),note:spec.baseNote||'pins and guides are printed in place'});
   if(spec.up)parts.push({id:'stand',name:'Stand',role:'frame',qty:2,mesh:prism([[0,0],[40,0],[0,40]],[],0,6),note:'glue to the back of the base so it stands upright'});
@@ -189,7 +189,7 @@ PK.U=(()=>{const {M4,prism,cyl,merge,circle,box}=K,PI=Math.PI,TAU=2*PI,BT=PK.BT;
     spur(R,Z,h,o={}){const hs=[o.bore==='round'?circle(SHB,32):octa(o.bore||SH+0.12)];if(o.holes)for(const q of o.holes)hs.push(circle(q[2],24,q[0],q[1]));return prism(gearO(R,Z,o),hs,0,h);},
     helical(R,Z,h,twist,o={}){const base=gearO(R,Z,o),n=o.seg||8,secs=[];for(let k=0;k<=n;k++){const t=k/n,a=o.herring?(t<0.5?t:1-t)*twist:t*twist,c=Math.cos(a),s=Math.sin(a);secs.push({o:base.map(p=>[p[0]*c-p[1]*s,p[0]*s+p[1]*c,t*h]),h:[(o.bore==='round'?circle(SHB,32):octa(SH+0.12)).map(p=>[p[0],p[1],t*h])]});}return K.loftS(secs);},
     /* bevel gear printed back face down: outer pitch radius Rp, pitch-cone half angle d, face width f; teeth shrink toward the apex above */
-    bevel(Rp,Z,d,f,o={}){const base=gearO(Rp,Z,o),Hx=Rp/Math.tan(d),zt=f*Math.cos(d),n=4,secs=[];const hole=o.bore==='round'?circle(SHB,32):octa(SH+0.12),xh=(o.holes||[]).map(q=>circle(q[2],20,q[0],q[1]));
+    bevel(Rp,Z,d,f,o={}){let base=gearO(Rp,Z,o);if(o.seg){const m=2*Rp/Z,rr=Rp-1.25*m;base=base.map(p=>{const t=((Math.atan2(p[1],p[0])-o.seg[0])%TAU+TAU)%TAU;if(t<o.seg[1])return p;const r=Math.min(Math.hypot(p[0],p[1]),rr),q=Math.atan2(p[1],p[0]);return[r*Math.cos(q),r*Math.sin(q)];});}const Hx=Rp/Math.tan(d),zt=f*Math.cos(d),n=4,secs=[];const hole=o.bore==='round'?circle(SHB,32):octa(SH+0.12),xh=(o.holes||[]).map(q=>circle(q[2],20,q[0],q[1]));
       for(let k=0;k<=n;k++){const z=zt*k/n,s=(Hx-z)/Hx;secs.push({o:base.map(p=>[p[0]*s,p[1]*s,z]),h:[hole,...xh].map(h=>h.map(p=>[p[0],p[1],z]))});}
       let m=K.loftS(secs);const hub=o.hub??0;if(hub>0)m=merge(m,prism(circle(hub,40),[hole],zt,zt+(o.hubH??4)));return m;},
     /* worm: pitch radius rp, axial pitch p (single start), length L, printed standing */

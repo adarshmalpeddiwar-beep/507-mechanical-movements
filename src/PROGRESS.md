@@ -32,4 +32,8 @@ fix them with attention to detail, and give EVERY mechanism a 3D-printable model
 (update after each batch: range, 2D fixes done, 3D done)
 - 24: 3D test model done.
 - 25–50: 2D audited and fixed (33 phase+teeth, 25 params bug, 29 3D, 35/201/221/222 exact follower, 36 single pin row, 37 fixed long pinion, 45 section, 46 upright axes, 49 rebuilt per Brown, 50 yokes). 3D models done for 25–50 (cad_models_025.js).
-- Next: 51+ (2D audit then 3D in cad_models_051.js).
+- 51–80: 2D fixed (51 ring joint, 54/65/70/71 real tappet-stud solver, 63 drop pawl, 64/66/67 worm drop, 68/69/241 exact Geneva-type, 74 mutilated bevel, 76 counter, 77/78/206/236 double pawl, leverPawl crank is a true 4-bar, bevelDiff (61,62,226,495,503,506) drawn as solids). 3D models 51–80 in cad_models_051.js.
+- Template sims still to review when their numbers come up: stepper (364, 398), shifter, gearStyle, mangle (192-194,371), pinionFollower ok.
+- Tools: /home/claude/tools/simsrc.py N-M (print sim source), dbg2.js <chunk> <expr> (load a CAD chunk and eval).
+- Brown text: WebFetch https://dn760104.eu.archive.org/0/items/fivehundredseven00browiala/fivehundredseven00browiala_djvu.txt with prompt 'precise paraphrase of movements A through B'.
+- Next: 81+ (cad_models_081.js).
