@@ -71,13 +71,14 @@ function list(){const items=MV.filter(matches);$('#count').textContent=`${items.
   const grid=$('#grid');if(!items.length){grid.innerHTML=`<p class="empty">No movements match “${esc(state.q)}”. Try a simpler word such as gear, cam or pump.</p>`;return;}
   grid.innerHTML=items.map(m=>`<a class="card" href="#m${m.n}" aria-label="No. ${m.n}, ${esc(m.t)}">
     ${SIMS[m.n]?`<canvas class="thumb" data-n="${m.n}" aria-hidden="true"></canvas>`:`<div class="plateno" aria-hidden="true">${m.n}</div>`}
-    <div class="cbody"><div class="cn"><b>${m.n}</b>${SIMS[m.n]?'<span class="badge">Interactive</span>':''}</div><div class="ct">${esc(m.t)}</div><div class="cc">${esc(CATNAME[m.c])}</div></div></a>`).join('');
+    <div class="cbody"><div class="cn"><b>${m.n}</b><span>${hasCad(m.n)?'<span class="badge d3">3D print</span> ':''}${SIMS[m.n]?'<span class="badge">Interactive</span>':''}</span></div><div class="ct">${esc(m.t)}</div><div class="cc">${esc(CATNAME[m.c])}</div></div></a>`).join('');
   grid.querySelectorAll('canvas.thumb').forEach(c=>thumbObs.observe(c));}
 function footer(){return `<footer><p>Descriptions are summarised in plain English from Henry T. Brown, <i>Five Hundred and Seven Mechanical Movements</i> (New York, 1868), now in the public domain. Drawings and simulations are new interpretations, so proportions are illustrative. Brown's text for Nos. 262 and 263 was not available in the copy used.</p><p>Built by <a href="https://www.instagram.com/underdogbuilder/" target="_blank" rel="noopener">@underdogbuilder</a></p></footer>`;}
 
 /* ---------- detail bench ---------- */
-let bench=null;
-function stopBench(){if(bench){bench.alive=false;bench=null;}}
+let bench=null,cadH=null,cadObs=null;
+function stopBench(){if(bench){bench.alive=false;bench=null;}if(cadObs){cadObs.disconnect();cadObs=null;}if(cadH){cadH.destroy();cadH=null;}}
+const hasCad=n=>!!(window.CAD&&window.CAD.MODELS[n]);
 function detail(n){stopBench();const m=MV[n-1];if(!m){location.hash='';return;}const sim=SIMS[n];
   const prev=n>1?n-1:null,next=n<507?n+1:null;
   app.innerHTML=`
@@ -110,11 +111,13 @@ function detail(n){stopBench();const m=MV[n-1];if(!m){location.hash='';return;}c
       <div class="sec"><h3 id="tracet">Trace</h3><canvas class="trace" id="tr"></canvas><div class="legend"><span>−8 s</span><span>now</span></div></div>
     </aside>`:''}
   </div>
+  ${hasCad(n)?`<section class="cad" id="cad" aria-label="3D-printable model"></section>`:''}
   ${footer()}`;
   $('#back').addEventListener('click',e=>{e.preventDefault();location.hash='';});
   $('#cat').addEventListener('click',()=>{state.cat=m.c;store('cat',m.c);state.q='';store('q','');location.hash='';});
   window.scrollTo(0,0);
   if(sim)startBench(sim);
+  const cs=$('#cad');if(cs){cadObs=new IntersectionObserver(es=>{if(es.some(e=>e.isIntersecting)&&!cadH){cadH=window.CAD.mount(cs,n,m.t);cadObs.disconnect();}},{rootMargin:'300px'});cadObs.observe(cs);}
 }
 
 function startBench(sim){
