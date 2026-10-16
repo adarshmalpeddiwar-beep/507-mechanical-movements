@@ -25,7 +25,7 @@ for(const n of [156,157,268,203,210,220,172,350,363,273,282,401])L.linkModel(n,'
 {const sim=window.MB.SIMS[119],st=window.MB.stad,r=sim.r,Rr=sim.R,N=sim.N,X0=sim.X0,Y0=sim.Y0,m=2*r/N,p=TAU*r/N;
  const frame=()=>{const Lh=sim.P.run*p/4,Pp=4*Lh+TAU*Rr,outR=1.25*m+18,o=[],h=[];for(let i=0;i<220;i++){const q=st(Pp*i/220,Lh,Rr);o.push([q.x+q.nx*outR,q.y+q.ny*outR]);}const n=Math.round(Pp/p),pr=[[-0.5,1.25],[-0.27,1.25],[-0.12,-1],[0.12,-1],[0.27,1.25]];
    for(let k=0;k<n;k++)for(const [f,d] of pr){const q=st(k*p+f*p,Lh,Rr);h.push([q.x+q.nx*d*m,q.y+q.ny*d*m]);}const half=Lh+Rr+outR;return{o:o,h:[h]};};
- PK.def(119,{S:0.3,summary:'The endless rack: an oblong frame with teeth all round its inside. The pinion turns steadily; its axle slides up and down in a fixed slot, so it runs along the top, round the end, and back along the bottom, driving the frame back and forth.',
+ for(const n of [119,197])PK.def(n,{S:0.3,summary:'The endless rack: an oblong frame with teeth all round its inside. The pinion turns steadily; its axle slides up and down in a fixed slot, so it runs along the top, round the end, and back along the bottom, driving the frame back and forth.',
   parts:[{id:'f',name:'Endless rack frame',role:'driven',layer:0,shape:frame},{id:'p',name:'Pinion, 12 teeth, with axle',role:'driver',layer:0,shape:S=>S.gear(r,N),bosses:[[0,0,2*(PK.TH+PK.GAP)+10,PK.PINR]]},
     {id:'g',name:'Slotted guide (bridge)',role:'frame',layer:1,shape:S=>({o:[[-26,-Rr-70],[26,-Rr-70],[26,Rr+70],[-26,Rr+70]],h:[S.slotPts(0,-(Rr-r),0,Rr-r),S.hole(0,-Rr-56),S.hole(0,Rr+56)]})}],
   ground:[[X0,Y0-Rr-56,1,1],[X0,Y0+Rr+56,1,1]],

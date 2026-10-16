@@ -233,18 +233,38 @@ reg({num:507,outLabel:'Output wheel, turns',
   reads(){const g=this.g;return[['Arm turns',`${(g.arm/TAU).toFixed(1)}`],['Output turns',`${(g.slow/TAU).toFixed(3)}`],['Brown\'s train','about 25,000 arm turns per output turn']];}});
 
 /* ---- mangle wheels ---- */
-function mangle(num,o){return reg({num,outLabel:'Wheel angle, degrees',concept:!!o.concept,
-  update(phi){const Ro=o.Ro,Ri=o.Ri,rp=22,span=o.span,q=(Ro-Ri)/2+rp,Lt=PI*q,La=Ro*span,Lc=Ri*span,P=La+Lt+Lc+Lt,s=mod(rp*phi,P);let w,pc;
-    if(s<La){w=span/2-s/Ro;pc=[0,-(Ro+rp)];}else if(s<La+Lt){w=-span/2;const t=-PI/2+(s-La)/q;pc=[q*Math.cos(t),-(Ro+Ri)/2+q*Math.sin(t)];}
-    else if(s<La+Lt+Lc){w=-span/2+(s-La-Lt)/Ri;pc=[0,-(Ri-rp)];}else{w=span/2;const t=PI/2+(s-La-Lt-Lc)/q;pc=[q*Math.cos(t),-(Ro+Ri)/2+q*Math.sin(t)];}
-    this.g={phi,w,pc,rp};},
+/* mangle wheel: pins on a closed track (outer row Ro, inner row Ri, round ends of radius e) at exactly the pinion's pitch;
+   the pinion's axle runs in a groove that follows the track, so it passes outside the outer row one way and inside the inner row the other */
+function mangleGeo(o){let Ro=o.Ro,Ri=o.Ri;const rp=22,Z=9,p=TAU*rp/Z;let e=(Ro-Ri)/2;if(e<6){Ro=Ri=(Ro+Ri)/2;e=0;}const Rm=(Ro+Ri)/2,q=e+rp,gw=12;
+  let span=Math.min(o.span,TAU-2*(q+gw)/Rm-0.25);const Nt=Math.round(((Ro+Ri)*span+TAU*e)/p);span=(Nt*p-TAU*e)/(Ro+Ri);
+  const t0=-PI/2-span/2,t1=-PI/2+span/2,u0=[Math.cos(t0),Math.sin(t0)],u1=[Math.cos(t1),Math.sin(t1)],v0=[-u0[1],u0[0]],v1=[-u1[1],u1[0]],C0=[Rm*u0[0],Rm*u0[1]],C1=[Rm*u1[0],Rm*u1[1]];
+  const La=Ro*span,Lc=Ri*span,Le=PI*e;
+  const pinAt=sg=>{if(sg<La){const t=t0+sg/Ro;return[Ro*Math.cos(t),Ro*Math.sin(t)];}if(sg<La+Le){const u=(sg-La)/e;return[C1[0]+e*(u1[0]*Math.cos(u)+v1[0]*Math.sin(u)),C1[1]+e*(u1[1]*Math.cos(u)+v1[1]*Math.sin(u))];}
+    if(sg<La+Le+Lc){const t=t1-(sg-La-Le)/Ri;return[Ri*Math.cos(t),Ri*Math.sin(t)];}const u=(sg-La-Le-Lc)/e;return[C0[0]-e*(u0[0]*Math.cos(u)+v0[0]*Math.sin(u)),C0[1]-e*(u0[1]*Math.cos(u)+v0[1]*Math.sin(u))];};
+  const pins=[];for(let k=0;k<Nt;k++){const P=pinAt(k*p);if(!pins.some(Q=>Math.hypot(Q[0]-P[0],Q[1]-P[1])<2))pins.push(P);}
+  /* closed loop of the pinion centre, offset outward by dr */
+  const loop=(dr,n=48)=>{const pts=[],ro=Ro+rp+dr,ri=Ri-rp-dr,rq=q+dr;
+    for(let i=0;i<=n*2;i++){const t=t0+(t1-t0)*i/(n*2);pts.push([ro*Math.cos(t),ro*Math.sin(t)]);}
+    for(let i=1;i<n;i++){const u=PI*i/n;pts.push([C1[0]+rq*(u1[0]*Math.cos(u)+v1[0]*Math.sin(u)),C1[1]+rq*(u1[1]*Math.cos(u)+v1[1]*Math.sin(u))]);}
+    for(let i=0;i<=n*2;i++){const t=t1+(t0-t1)*i/(n*2);pts.push([ri*Math.cos(t),ri*Math.sin(t)]);}
+    for(let i=1;i<n;i++){const u=PI*i/n;pts.push([C0[0]-rq*(u0[0]*Math.cos(u)+v0[0]*Math.sin(u)),C0[1]-rq*(u0[1]*Math.cos(u)+v0[1]*Math.sin(u))]);}
+    return pts;};
+  return{Ro,Ri,e,Rm,q,rp,Z,p,span,Nt,pins,loop,gw,Rw:Ro+rp+gw+12,La,Lc,Lt:PI*q,P:La+Lc+TAU*q};}
+function mangle(num,o){const G=mangleGeo(o);return reg({num,outLabel:'Wheel angle, degrees',concept:!!o.concept,geo:G,
+  update(phi){const {Ro,Ri,rp,span,q,La,Lt,Lc,P,Rm}=G,s=mod(rp*phi,P);let w,pc;
+    if(s<La){w=span/2-s/Ro;pc=[0,-(Ro+rp)];}else if(s<La+Lt){w=-span/2;const t=-PI/2+(s-La)/q;pc=[q*Math.cos(t),-Rm+q*Math.sin(t)];}
+    else if(s<La+Lt+Lc){w=-span/2+(s-La-Lt)/Ri;pc=[0,-(Ri-rp)];}else{w=span/2;const t=PI/2+(s-La-Lt-Lc)/q;pc=[q*Math.cos(t),-Rm+q*Math.sin(t)];}
+    this.g={phi,w,pc,rp,a:phi+PI/2-PI/G.Z};},
   output(){return this.g.w*180/PI;},
-  draw(){const g=this.g,O=[400,300],Ro=o.Ro,Ri=o.Ri,span=o.span;circ(O[0],O[1],Ro+30);paint(C['steel-fill'],C.ink);circ(O[0],O[1],Ri-26);paint(C.sheet,C.ink);
-    const n=Math.round(Ro*span/16);for(let i=0;i<=n;i++){const t=-PI/2+g.w-span/2+i*span/n;circ(O[0]+Ro*Math.cos(t),O[1]+Ro*Math.sin(t),5);paint(C.part,C.ink,1);}
-    const ni=Math.round(Ri*span/16);for(let i=0;i<=ni;i++){const t=-PI/2+g.w-span/2+i*span/ni;circ(O[0]+Ri*Math.cos(t),O[1]+Ri*Math.sin(t),5);paint(C.part,C.ink,1);}
-    pivot(O[0],O[1],6);const P=[O[0]+g.pc[0],O[1]+g.pc[1]];bar(P[0],40,P[0],P[1],10,C.part2);drawGear(P[0],P[1],g.rp,9,g.phi,C['brass-fill'],{bore:4});pivot(P[0],P[1],3);
-    label(o.label,400,505,'center');},
-  reads(){return[['Wheel',`${(this.g.w*180/PI).toFixed(0)}°`],['Pinion','turns one way only'],['Speeds',Math.abs(o.Ro-o.Ri)<1?'equal both ways':'slower one way']];}});}
+  draw(){const g=this.g,O=[400,300],c=Math.cos(g.w),s=Math.sin(g.w),T=([x,y])=>[O[0]+x*c-y*s,O[1]+x*s+y*c];
+    circ(O[0],O[1],G.Rw);paint(C['steel-fill'],C.ink);
+    ctx.beginPath();const lo=G.loop(G.gw/2).map(T),li=G.loop(-G.gw/2).map(T);lo.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();li.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();paint(C.sheet,C.ink,0.8);
+    for(const p of G.pins){const q=T(p);circ(q[0],q[1],3.6);paint(C.part,C.ink,1);}
+    pivot(O[0],O[1],6);const P=[O[0]+g.pc[0],O[1]+g.pc[1]];
+    ctx.save();ctx.setLineDash([5,4]);ctx.strokeStyle=C.muted;ctx.lineWidth=1;circ(O[0],O[1]-G.Rm,G.q+6,false);ctx.stroke();ctx.restore();
+    drawGear(P[0],P[1],g.rp,G.Z,g.a,C['brass-fill'],{bore:4});pivot(P[0],P[1],3);
+    label(o.label,400,505,'center');label('pinion axle runs in the groove · dashed: window in the bridge',400,30,'center');},
+  reads(){return[['Wheel',`${(this.g.w*180/PI).toFixed(0)}°`],['Pinion','turns one way only'],['Speeds',Math.abs(o.Ro-o.Ri)<6?'equal both ways':'slower one way']];}});}
 mangle(36,{Ro:130,Ri:130,span:PI*1.7,label:'ONE ROW OF TEETH · the pinion works outside it one way and inside it the other'});
 mangle(192,{Ro:160,Ri:100,span:PI*1.5,label:'SPEED CHANGES THROUGH EACH SWING',concept:true});
 mangle(193,{Ro:165,Ri:105,span:PI*1.8,label:'NEARLY A FULL TURN EACH WAY, SLOWER ONE WAY'});

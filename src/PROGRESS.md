@@ -40,4 +40,6 @@ fix them with attention to detail, and give EVERY mechanism a 3D-printable model
 - 116–150: 2D fixed 143 (worm on sliding frame). Models in cad_models_116.js incl. M119–M127 and generic link models (PK.Lib.linkModel) for all link() sims, governors (govModel in 116 chunk).
 - PK.Lib (cad_pk.js): pxPoly, offsetLoop, pip, groovedPlate, camFlatModel(n,summary), linkModel(n,summary). Use them from any chunk.
 - 151–190: 2D fixed 153/154 (stud contact), 166 (slotted rod dwell). Models in cad_models_151.js. TODO: 171 is an alias of 344 — give 171 the same model when 344 is modelled.
-- Next: 191+ (cad_models_191.js).
+- 191–230: 2D in sims_d8.js: 191 toothed scroll with exact sliding pinion, mangle template rewritten (exact pin track, round ends, groove; geo stored for models: 36,192–194,371), 195 worm between two wheels + rolls, 196 epicyclic arm, 198 rack on parallel rods (Brown), 208 exact pin pitches, 211 Geneva with lock (lockTooth), 212–215 Geneva stop with blank place (sorted rim — genevaWheel has a wrap bug for odd N; use the 212 builder), 216 part-gear + part-ring quick return, 219 exact contact radius, 223 three sector planes with teeth, 224 slotted plate, 227–229 pocket wheels. Helpers sectorExt/sectorInt/polyAt in sims_d8.
+  Models: cad_models_191.js; mangle loop moved into chunk 025; loops extended: 31→202, 30/38→209, 55→200, 77/78→206/236, 61/62→226/495/503/506, 68/69/241→211–215, 114→199, 119→197. TODO: 225 = alias of 232 (model with 232).
+- Next: 231+ (cad_models_231.js).

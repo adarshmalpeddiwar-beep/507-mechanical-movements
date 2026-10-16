@@ -55,7 +55,7 @@ bevelPair(42,{ZA:18,ZB:27,SG:PI/3,f:8,summary:'Bevel gears for shafts meeting at
   read:phi=>`disk ${(phi/TAU).toFixed(2)} turns · wheel ${(phi/TAU/Zw*Zw).toFixed(2)} teeth`,drive:'Turn the disk by its knob: the wheel moves on one tooth per turn.'});}
 /* 31 worm and worm wheel */
 {const m=2,p=PI*m,rp=6,Zw=30,Rw=m*Zw/2,Hw=U.BT+12,Hc=Hw+rp+Rw,lam=Math.atan(p/(TAU*rp)),hw=8;
- PK.defS(31,{summary:'A single-start worm on a level shaft drives a 30-tooth wheel above it. The wheel’s teeth are set at the worm’s lead angle so they lie along the thread. One turn of the worm moves the wheel one tooth: a 30 : 1 reduction that the wheel cannot drive backwards.',cam:{yaw:0.7,pitch:0.35},
+ for(const n of [31,202])PK.defS(n,{summary:n===202?'Brown’s modified worm and wheel: a single-start worm on a level shaft turns a 30-tooth wheel whose teeth lie along the thread, one tooth per turn of the worm, a steady and powerful 30 : 1 drive that cannot run backwards.':'A single-start worm on a level shaft drives a 30-tooth wheel above it. The wheel’s teeth are set at the worm’s lead angle so they lie along the thread. One turn of the worm moves the wheel one tooth: a 30 : 1 reduction that the wheel cannot drive backwards.',cam:{yaw:0.7,pitch:0.35},
   base:()=>[U.plate(-38,-20,38,46),U.wall(-2*p-4,0,'x',[[0,Hw]],18,5,Hw+6),U.wall(2*p+4,0,'x',[[0,Hw]],18,5,Hw+6),U.wall(0,14,'y',[[0,Hc]],18),U.wall(0,38,'y',[[0,Hc]],18)],
   parts:[{id:'wm',name:'Worm (single start)',role:'driver',mesh:U.worm(rp,p,4*p)},{id:'wh',name:'Worm wheel, 30 teeth',role:'driven',mesh:U.helical(Rw,Zw,hw,-hw*Math.tan(lam)/Rw,{seg:3})},
     {id:'sw',name:'Worm shaft',mesh:U.shaft(4*p+30)},{id:'sh',name:'Wheel shaft',mesh:U.shaft(50)},{id:'k',name:'Hand crank',role:'driver',mesh:U.crank()},{id:'col',name:'Collar',role:'small',qty:2,mesh:U.collar()}],
@@ -74,8 +74,8 @@ bevelPair(42,{ZA:18,ZB:27,SG:PI/3,f:8,summary:'Bevel gears for shafts meeting at
 PK._S(0.3);
 const pxPoly=(pts,holes=[[0,0]])=>({o:pts,h:holes.map(h=>Sh.hole(h[0],h[1],h[2]))});
 /* 30, 38 non-circular gear pairs straight from the simulation's pitch curves */
-for(const n of [30,38]){const sim=window.MB.SIMS[n];if(!sim)continue;sim.ensurePC();const d=sim.d,F1=[400-d/2,265],F2=[400+d/2,265];const tc=window.MB.toothedCurve;
-  PK.def(n,{S:0.3,summary:n===30?'Two rounded-square gears whose pitch curves are exact rolling partners, so the teeth stay in mesh all the way round. The driven gear speeds up and slows down four times a turn.':'A gear that is round for half a turn and bulged for the rest, with its exact rolling partner: the driven gear runs at a steady speed for half the turn and a changing speed for the rest.',
+for(const n of [30,38,209]){const sim=window.MB.SIMS[n];if(!sim)continue;sim.ensurePC();const d=sim.d,F1=[400-d/2,265],F2=[400+d/2,265];const tc=window.MB.toothedCurve;
+  PK.def(n,{S:0.3,summary:n===209?'Two lobed wheels whose pitch curves are exact rolling partners, with teeth cut along them so the motion carries on past the points where plain rolling contact would slip: the driven wheel speeds up and slows down twice a turn.':n===30?'Two rounded-square gears whose pitch curves are exact rolling partners, so the teeth stay in mesh all the way round. The driven gear speeds up and slows down four times a turn.':'A gear that is round for half a turn and bulged for the rest, with its exact rolling partner: the driven gear runs at a steady speed for half the turn and a changing speed for the rest.',
     parts:[{id:'a',name:'Driving gear',role:'driver',layer:0,shape:pxPoly(tc(sim.pcA,0)),bosses:[[sim.pcA.P[0][0]*0.5,0,14,3.5]]},{id:'b',name:'Driven gear',role:'driven',layer:0,shape:pxPoly(tc(sim.pcB,sim.phB))}],
     ground:[[F1[0],F1[1],0,0],[F2[0],F2[1],0,0]],pose:g=>({a:[F1[0],F1[1],g.phi],b:[F2[0],F2[1],PI+g.a2]}),drive:'Turn the knob on the orange gear and watch the blue one speed up and slow down.'});}
 /* 33 elliptical gears on their foci */
@@ -113,15 +113,25 @@ for(const n of [35,221,201,222]){const sim=window.MB.SIMS[n];if(!sim)continue;co
     {id:'r',name:'Roller',role:'link',layer:0,t:2,qty:N,shape:S=>S.disk(10.5,[])}],
   ground:[[O[0],O[1],0,1]],
   pose(g){const rs=[];for(let k=0;k<N;k++){const t=g.w+k*TAU/N,r=70+25*Math.cos(3*(t-g.phi))+12;rs.push([O[0]+r*Math.cos(t),O[1]+r*Math.sin(t),0]);}return{w:[O[0],O[1],g.w],c:[O[0],O[1],g.phi],r:rs};},drive:'Turn the lobed driver by its knob.'});}
-/* 36 mangle wheel: one row of pins on the wheel; the pinion's axle runs in a window in a bridge so it can pass outside and inside the row */
-{const sim=window.MB.SIMS[36],O=[400,300],Rr=130,span=PI*1.7,rp=22,n=Math.round(Rr*span/16),q=rp,S0=0.3;
- const pins=[];for(let i=0;i<=n;i++){const t=-PI/2-span/2+i*span/n;pins.push([Rr*Math.cos(t),Rr*Math.sin(t),PK.TH+PK.GAP,1.6]);}
- PK.def(36,{S:S0,summary:'A mangle wheel: a single row of pins round the wheel with a gap in it. The 9-tooth pinion works outside the row one way and inside it the other, its axle sliding in a window in the bridge, so steady turning of the pinion swings the wheel back and forth.',
-  parts:[{id:'w',name:'Mangle wheel with pin row',role:'driven',layer:0,shape:S=>({o:S.circle(Rr+30,120),h:[S.hole(0,0),...[0,1,2,3].map(k=>S.circle(30,32,60*Math.cos(k*PI/2+PI/4),60*Math.sin(k*PI/2+PI/4)))]}),bosses:pins},
-    {id:'p',name:'Pinion, 9 teeth, with axle',role:'driver',layer:1,shape:S=>S.gear(rp,9),bosses:[[0,0,2*(PK.TH+PK.GAP)+10,PK.PINR]]},
-    {id:'br',name:'Bridge with window',role:'frame',layer:2,shape:S=>({o:[[O[0]-50,20],[O[0]+50,20],[O[0]+50,O[1]-Rr+rp+40],[O[0]-50,O[1]-Rr+rp+40]],h:[S.hole(O[0]-34,40),S.hole(O[0]+34,40),S.slotPts(O[0],O[1]-Rr-rp,O[0],O[1]-Rr+rp,2*q+(PK.BORER*2+0.6)/S0)]})}],
-  ground:[[O[0],O[1],0,0],[O[0]-34,40,2,2],[O[0]+34,40,2,2]],
-  pose(g){return{w:[O[0],O[1],g.w],p:[O[0]+g.pc[0],O[1]+g.pc[1],g.phi],br:[0,0,0]};},drive:'Turn the pinion by its axle: the wheel swings one way, pauses while the pinion climbs round the end pin, then swings back.'});}
+/* 36, 192–194 mangle wheels: pins on a closed track at the pinion's exact pitch; the pinion's axle runs down into a groove that
+   follows the track (an outer guide ring and an island, both glued to the wheel), so it keeps in mesh as it passes outside and inside */
+for(const n of [36,192,193,194]){const sim=window.MB.SIMS[n];if(!sim||!sim.geo)continue;const G=sim.geo,O=[400,300],S0=0.42;PK._S(S0);
+ const pins=G.pins.map(p=>[p[0],p[1],PK.TH+PK.GAP-0.3,1.4]),Rw=G.Rw,gw=(PK.PINR*2+0.8)/S0,axR=PK.PINR,Hb=O[1]-G.Rm,win=G.q+(axR+0.6)/S0;
+ const pin=K.merge(K.cyl(axR-0.05,0,PK.zl(4)-PK.zl(1)+3,24),K.cyl(5,PK.zl(4)-PK.zl(1)+3,PK.zl(4)-PK.zl(1)+10,32));
+ PK.def(n,{S:S0,summary:({36:'A mangle wheel with a single row of pins. The pinion turns steadily one way; it drives the wheel round from outside the row, climbs round the end pin, and drives it back from inside. Its axle runs in a groove that follows the row, so it can never jump out of mesh.',
+   192:'A mangle wheel whose outer and inner rows of pins are far apart, joined by round ends. Outside the outer row the wheel turns slowly; inside the inner row, faster: the speed changes through each swing. The pinion’s axle follows a groove beside the pins.',
+   193:'A mangle wheel that swings nearly a whole turn each way: slowly while the pinion works outside the outer row of pins, faster while it works inside the inner row. The pinion’s axle follows a groove round the pin track.',
+   194:'A mangle wheel with one row of pins, so the speed is the same both ways. The steadily turning pinion drives from outside the row one way and from inside it the other; its axle runs in a groove round the row.'})[n],
+  parts:[{id:'w',name:'Mangle wheel',role:'driven',layer:0,shape:S=>S.disk(Rw,[[0,0]],120)},
+   {id:'go',name:'Guide ring (glue to the wheel)',role:'driven',layer:1,shape:S=>({o:S.circle(Rw,120),h:[S.hole(0,0),G.loop(gw/2,40).slice().reverse()]})},
+   {id:'gi',name:'Pin island (glue to the wheel)',role:'driven',layer:1,shape:S=>({o:G.loop(-gw/2,40),h:[]}),bosses:pins},
+   {id:'p',name:`Pinion, ${G.Z} teeth`,role:'driver',layer:2,shape:S=>({o:S.gearOutline(G.rp,G.Z,{backlash:0.5}),h:[S.hole(0,0,(axR+0.05)/S0)]})},
+   {id:'ax',name:'Pinion axle with knob (glue in the pinion)',role:'driver',layer:1,mesh:pin},
+   {id:'br',name:'Bridge with window',role:'frame',layer:3,shape:S=>({o:[[O[0]-win-30,O[1]-Rw-34],[O[0]+win+30,O[1]-Rw-34],[O[0]+win+30,Hb+win+26],[O[0]-win-30,Hb+win+26]],h:[S.hole(O[0]-win-14,O[1]-Rw-18),S.hole(O[0]+win+14,O[1]-Rw-18),S.circle(win,64,O[0],Hb)]})}],
+  ground:[[O[0],O[1],0,1],[O[0]-win-14,O[1]-Rw-18,3,3],[O[0]+win+14,O[1]-Rw-18,3,3]],
+  pose(g){const P=[O[0]+g.pc[0],O[1]+g.pc[1]];return{w:[O[0],O[1],g.w],go:[O[0],O[1],g.w],gi:[O[0],O[1],g.w],p:[P[0],P[1],g.a],ax:[P[0],P[1],g.a],br:[0,0,0]};},
+  drive:'Turn the pinion by the knob on its axle: the wheel swings one way, pauses while the pinion rounds the end of the track, then swings back.'});}
+PK._S(0.3);
 /* 37 spiral studs and a long-toothed pinion */
 {const R=57,z0=U.BT+1.5,zt=z0+4,Zp=10,m=1.6,Rp=Zp*m/2,zp=zt+3+Rp,rr=m0=>(60+110*m0/TAU)*0.3;
  const disk=()=>{const ms=[K.prism(K.circle(R,120),[K.circle(U.SHB,32)],0,4)];let L=0,last=null;const studs=[];for(let i=0;i<=2000;i++){const t=i/2000*TAU,r=rr(t),p=[r*Math.cos(-t),r*Math.sin(-t)];if(last)L+=Math.hypot(p[0]-last[0],p[1]-last[1]);last=p;if(L>=PI*m||i===0){studs.push(p);L=0;}}
