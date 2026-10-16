@@ -71,62 +71,6 @@ const plateMesh=()=>merge(box(PLW,PLW,0,PLT),cyl(6,PLT,PLT+1,40),cyl(PIN,PLT,PLT
 const arc3=(c,e1,e2,r,a0,a1,step=2.5)=>{const n=Math.max(2,Math.ceil(Math.abs(a1-a0)*r/step)),o=[];for(let k=0;k<n;k++){const a=a0+(a1-a0)*k/n;o.push([c[0]+r*(Math.cos(a)*e1[0]+Math.sin(a)*e2[0]),c[1]+r*(Math.cos(a)*e1[1]+Math.sin(a)*e2[1]),c[2]+r*(Math.cos(a)*e1[2]+Math.sin(a)*e2[2])]);}return o;};
 const line3=(a,b,step=3)=>{const n=Math.max(1,Math.ceil(Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2])/step)),o=[];for(let k=0;k<n;k++)o.push([a[0]+(b[0]-a[0])*k/n,a[1]+(b[1]-a[1])*k/n,a[2]+(b[2]-a[2])*k/n]);return o;};
 
-/* ===== 3 · right-angle belt with guide pulleys ===== */
-(()=>{const RA=25.5,RB=20.5,zbA=12,hA=lv(zbA).belt,yB=62,zB=hA+2.7+RB,yG1=112,yG2=150;
-  const L1b=[0,yG1,zB-RB],L1a=[RA,yG1,hA],G1c=[(L1a[0]+L1b[0])/2,yG1,(L1a[2]+L1b[2])/2],rG1=Math.hypot(L1a[0]-L1b[0],L1a[2]-L1b[2])/2;
-  const L2a=[0,yG2,zB+RB],L2b=[-RA,yG2,hA],G2c=[(L2a[0]+L2b[0])/2,yG2,(L2a[2]+L2b[2])/2],rG2=Math.hypot(L2a[0]-L2b[0],L2a[2]-L2b[2])/2;
-  const nOf=(a,b)=>{const v=[b[0]-a[0],0,b[2]-a[2]];const n=[v[2],0,-v[0]];return n[2]<0?n.map(x=>-x):n;};
-  const n1=nOf(L1a,L1b),n2=nOf(L2a,L2b);
-  const BR={B:bracket([0,yB,zB],[1,0,0],yB),G1:bracket(G1c,n1),G2:bracket(G2c,n2)};
-  const path=(()=>{let p=[];p=p.concat(line3([RA,0,hA],L1a));const w1=[(L1a[0]-G1c[0])/rG1,0,(L1a[2]-G1c[2])/rG1];p=p.concat(arc3(G1c,w1,[0,1,0],rG1,0,PI));
-    p=p.concat(line3(L1b,[0,yB,zB-RB]));p=p.concat(arc3([0,yB,zB],[0,0,-1],[0,-1,0],RB,0,PI));p=p.concat(line3([0,yB,zB+RB],L2a));
-    const w2=[(L2a[0]-G2c[0])/rG2,0,(L2a[2]-G2c[2])/rG2];p=p.concat(arc3(G2c,w2,[0,1,0],rG2,0,PI));p=p.concat(line3(L2b,[-RA,0,hA]));p=p.concat(arc3([0,0,hA],[-1,0,0],[0,-1,0],RA,0,PI));return p;})();
-  const L=lenOf(path);
-  const slots=[BR.B.slot,BR.G1.slot,BR.G2.slot];
-  MODELS[3]={summary:'A flat pulley on the base drives an upright pulley at right angles. Two tilted guide pulleys lead the band round, so each strand always runs into the plane of the pulley it meets.',cam:{yaw:-0.5,pitch:0.5},
-    parts(){const lA=lv(zbA);return[
-      {id:'base',name:'Base plate',role:'frame',mesh:basePlate(rrect(150,240,8,8,0,62),slots,[{x:0,y:0,zb:zbA,top:lA.pinTop}]),note:'three slots take the bracket wedges'},
-      {id:'pa',name:'Driving pulley (flat)',role:'driver',mesh:pulley(RA-0.0,{knob:true})},
-      {id:'pb',name:'Upright pulley',role:'driven',mesh:pulley(RB)},
-      {id:'g1',name:'Small guide pulley',role:'link',mesh:pulley(rG1)},{id:'g2',name:'Large guide pulley',role:'link',mesh:pulley(rG2)},
-      {id:'pl',name:'Bracket plate with pin',qty:3,role:'frame',mesh:plateMesh(),note:'pin up, no supports'},
-      {id:'wB',name:'Wedge for the upright pulley',role:'frame',mesh:BR.B.wedgeMesh,note:'print lying on its side'},
-      {id:'w1',name:'Wedge for the small guide',role:'frame',mesh:BR.G1.wedgeMesh,note:'print lying on its side'},
-      {id:'w2',name:'Wedge for the large guide',role:'frame',mesh:BR.G2.wedgeMesh,note:'print lying on its side'},
-      {id:'cap',name:'Pin cap',qty:4,role:'small',mesh:cap()},beltPart(L)];},
-    pose(phi){const s=phi*RA;return{inst:[['base',M4.id()],['pa',PZ(0,0,zbA,phi)],['cap',CAPM(0,0,zbA)],
-      ['pl',BR.B.F],['wB',BR.B.wedgeM],['pb',BR.B.pulleyM(-s/RB)],['cap',BR.B.capM],
-      ['pl',BR.G1.F],['w1',BR.G1.wedgeM],['g1',BR.G1.pulleyM(s/rG1)],['cap',BR.G1.capM],
-      ['pl',BR.G2.F],['w2',BR.G2.wedgeM],['g2',BR.G2.pulleyM(-s/rG2)],['cap',BR.G2.capM]],
-      belts:[{pts:path,r:CORD,travel:s}],read:`flat pulley ${Math.round(phi*180/PI)%360}° · upright pulley ${(RA/RB).toFixed(2)}× speed, at right angles`};},
-    hardware:[cordNote(L),'A few drops of superglue to fix each bracket plate onto its wedge.'],
-    steps:['Push each wedge down into its slot in the base; the sloping face looks towards the pulley it carries.','Glue a bracket plate onto each sloping face, pin pointing away from the wedge.',...COMMON,'Lead the band from the flat pulley out to the small guide, back to the bottom of the upright pulley, over its top, out to the large guide and back to the flat pulley.']};
-})();
-
-/* ===== 4 · right-angle drive without guides (quarter-turn band) ===== */
-(()=>{const RA=25.5,RB=20.5,zbA=8,hA=lv(zbA).belt,yB=72,zB=hA+RB,xB=RA;
-  const BRB=bracket([xB,yB,zB],[1,0,0]);
-  const path=(()=>{/* strand 1: from A at angle 0 up to B (tangent in B plane, B turns clockwise seen from +x) */
-    const P=[0,hA],c=[yB,zB],d=Math.hypot(c[0]-P[0],c[1]-P[1]),th=Math.atan2(P[1]-c[1],P[0]-c[0]),be=Math.acos(RB/d);let T1=null,aT=0;
-    for(const sg of [1,-1]){const a=th+sg*be;const q=[c[0]+RB*Math.cos(a),c[1]+RB*Math.sin(a)];const v=[Math.sin(a),-Math.cos(a)];if((q[0]-P[0])*v[0]+(q[1]-P[1])*v[1]>0){T1=q;aT=a;}}
-    /* B wraps clockwise from aT down to -90deg */let a1=-PI/2;while(a1>aT)a1-=TAU;
-    const Lb=[xB,yB,hA];/* strand 2: from B bottom to A tangent (A anticlockwise) */
-    const Q=[xB,yB],D=Math.hypot(Q[0],Q[1]),ph=Math.atan2(Q[1],Q[0]),ga=Math.acos(RA/D);let TA=null,aA=0;for(const sg of [1,-1]){const a=ph+sg*ga;const q=[RA*Math.cos(a),RA*Math.sin(a)];const v=[-Math.sin(a),Math.cos(a)];if((q[0]-Q[0])*v[0]+(q[1]-Q[1])*v[1]>0.01){TA=q;aA=a;}}
-    let p=[];p=p.concat(line3([RA,0,hA],[xB,T1[0],T1[1]]));const ab=[];const n=Math.ceil(Math.abs(a1-aT)*RB/2.5);for(let k=0;k<n;k++){const a=aT+(a1-aT)*k/n;ab.push([xB,yB+RB*Math.cos(a),zB+RB*Math.sin(a)]);}p=p.concat(ab);
-    p=p.concat(line3(Lb,[TA[0],TA[1],hA]));let e=mod(aA,TAU);const m=Math.ceil((TAU-e)*RA/2.5);for(let k=0;k<m;k++){const a=e+(TAU-e)*k/m;p.push([RA*Math.cos(a),RA*Math.sin(a),hA]);}return p;})();
-  const L=lenOf(path);
-  MODELS[4]={summary:'The band itself twists a quarter turn between a flat pulley and an upright one, with no guides. It works one way round only: each strand must run into the middle of the pulley it is heading for.',cam:{yaw:-0.4,pitch:0.45},
-    parts(){const lA=lv(zbA);return[
-      {id:'base',name:'Base plate',role:'frame',mesh:basePlate(rrect(130,150,8,8,10,40),[BRB.slot],[{x:0,y:0,zb:zbA,top:lA.pinTop}]),note:'slot takes the bracket wedge'},
-      {id:'pa',name:'Driving pulley (flat)',role:'driver',mesh:pulley(RA,{knob:true})},{id:'pb',name:'Upright pulley',role:'driven',mesh:pulley(RB)},
-      {id:'pl',name:'Bracket plate with pin',role:'frame',mesh:plateMesh(),note:'pin up, no supports'},{id:'wB',name:'Bracket wedge',role:'frame',mesh:BRB.wedgeMesh,note:'print lying on its side'},
-      {id:'cap',name:'Pin cap',qty:2,role:'small',mesh:cap()},beltPart(L)];},
-    pose(phi){const s=phi*RA;return{inst:[['base',M4.id()],['pa',PZ(0,0,zbA,phi)],['cap',CAPM(0,0,zbA)],['pl',BRB.F],['wB',BRB.wedgeM],['pb',BRB.pulleyM(-s/RB)],['cap',BRB.capM]],
-      belts:[{pts:path,r:CORD,travel:s}],read:`turn the knob anticlockwise (seen from above) · upright pulley ${(RA/RB).toFixed(2)}× speed`};},
-    hardware:[cordNote(L),'Superglue for the bracket plate.'],
-    steps:['Push the wedge into the base slot and glue the bracket plate onto its upright face, pin pointing outwards.',...COMMON,'Fit the band so it leaves the flat pulley straight up into the upright pulley, and comes back down off the bottom of the upright pulley.','Turn the knob anticlockwise. Turned the other way the band will run off: that is Brown\'s point.']};
-})();
-
 /* ===== 5 · belt tightener clutch ===== */
 (()=>{const A=[-55,0],B=[55,0],R=24.5,RT=10.5,zbAB=BASE+7,Pv=[-26,-58],armT=[26,35],zbL=BASE+0.3,LT=5;
   const Tpos=e=>{const a=e?0:-0.55,c=Math.cos(a),s=Math.sin(a);return[Pv[0]+armT[0]*c-armT[1]*s,Pv[1]+armT[0]*s+armT[1]*c];};

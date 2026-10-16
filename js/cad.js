@@ -110,7 +110,7 @@ void main(){vec4 w=M*vec4(p,1.);vw=w.xyz;vn=mat3(M)*n;gl_Position=VP*w;}`;
 const FS=`precision mediump float;varying vec3 vn;varying vec3 vw;uniform vec3 col;uniform vec3 eye;uniform float alpha;
 void main(){vec3 N=normalize(vn);vec3 V=normalize(eye-vw);if(dot(N,V)<0.)N=-N;
 vec3 L1=normalize(vec3(.4,-.5,.8));vec3 L2=normalize(vec3(-.6,.4,.35));
-float d=max(dot(N,L1),0.)*.6+max(dot(N,L2),0.)*.22;float hemi=.5+.5*N.z;
+vec3 L3=normalize(vec3(.1,-1.,.25));float d=max(dot(N,L1),0.)*.55+max(dot(N,L2),0.)*.2+max(dot(N,L3),0.)*.22;float hemi=.5+.5*N.z;
 vec3 H=normalize(L1+V);float sp=pow(max(dot(N,H),0.),40.)*.22;
 vec3 c=col*(.32+.16*hemi+d)+sp;float rim=pow(1.-max(dot(N,V),0.),3.);gl_FragColor=vec4(c+rim*.05,alpha);}`;
 function hex(c){c=c.trim();if(c.startsWith('#')){if(c.length===4)c='#'+c[1]+c[1]+c[2]+c[2]+c[3]+c[3];return[1,3,5].map(i=>parseInt(c.slice(i,i+2),16)/255);}const m=c.match(/[\d.]+/g)||[200,200,200];return m.slice(0,3).map(v=>v/255);}
@@ -262,10 +262,12 @@ function gearOutline(R,Z,o={}){const m=2*R/Z,pa=20*deg,rb=R*Math.cos(pa),bl=(o.b
     if(rr<r0-1e-6)pts.push([rr*Math.cos(c+thR+0.0001),rr*Math.sin(c+thR+0.0001)]);
     const c2=c+TAU/Z,g0=c+thR+0.0002,g1=c2-thR-0.0002;if(g1>g0)for(const p of arcPts(0,0,rr,g0,g1,3).slice(1,-1))pts.push(p);}
   return pts;}
-/* internal gear: the hole is an external-gear-like outline with tip/root swapped and teeth where the spaces are */
-function ringHole(R,Z){const m=2*R/Z;const p=gearOutline(R,Z,{add:1.25,backlash:-0.12});/* bigger outline */
-  /* rotate by half a pitch so internal teeth (material) sit at angle 0 */
-  const a=PI/Z;return p.map(([x,y])=>[x*Math.cos(a)-y*Math.sin(a),x*Math.sin(a)+y*Math.cos(a)]).map(([x,y])=>{const r=Math.hypot(x,y),t=Math.atan2(y,x);/* clamp root (inner tips) to R-m */const rr=Math.max(r,R-m);return[rr*Math.cos(t),rr*Math.sin(t)];});}
+/* internal gear hole: inner tooth tips at R-m, spaces shaped like external teeth reaching out to R+1.25m */
+function ringHole(R,Z){const m=2*R/Z,pa=20*deg,rb=R*Math.cos(pa),bl=0.12/S,inv=a=>Math.tan(a)-a,ip=inv(pa),ra=R+1.25*m,rr=R-m,half=PI/(2*Z)+bl/(2*R);
+  const r0=Math.max(rb,rr),fl=[];for(let i=0;i<=6;i++){const r=r0+(ra-r0)*i/6;fl.push([r,half+ip-inv(Math.acos(Math.min(1,rb/r)))]);}if(rr<r0-1e-6)fl.unshift([rr,fl[0][1]]);
+  const pts=[],tau=TAU/Z;for(let k=0;k<Z;k++){const c=k*tau,sc=c+tau/2;pts.push([rr*Math.cos(c),rr*Math.sin(c)]);
+    for(const [r,t] of fl)pts.push([r*Math.cos(sc-t),r*Math.sin(sc-t)]);for(let i=fl.length-1;i>=0;i--){const [r,t]=fl[i];pts.push([r*Math.cos(sc+t),r*Math.sin(sc+t)]);}}
+  return pts;}
 const hole=(x,y,r)=>circle(r??BORER/S,28,x,y);
 const Sh={
   gear(R,Z,o={}){const m=2*R/Z,root=R-1.25*m;const hs=[hole(0,0,o.bore)];if(o.hub===false){}const sp=o.lighten??(root*S>22);
@@ -331,8 +333,8 @@ function build(n,spec,P){S=spec.S||0.3;const R=runner(spec.sim||n,spec.P);spec._
   /* base plate: from swept extents of every part */
   const lo=[1e9,1e9],hi=[-1e9,-1e9];
   for(let i=0;i<24&&R;i++){const g=R.at(i/24*TAU*(spec.cycle||1));const ps=spec.pose(g,R.sim,i/24*TAU);for(const p of spec.parts){if(p.noPlate)continue;const v=ps[p.id];if(!v)continue;const list=(Array.isArray(v[0])?v:[v]);
-      for(const pv of list){if(pv.length===16)continue;const sh=p._bbShape||(p._bbShape=(typeof p.shape==='function'?p.shape(Sh):p.shape));if(!sh)continue;const c=Math.cos(pv[2]||0),s=Math.sin(pv[2]||0);
-        bboxPts(sh.o.filter((_,k)=>k%3===0).map(([x,y])=>[pv[0]+x*c-y*s,pv[1]+x*s+y*c]),lo,hi);}}}
+      for(const pv of list){if(pv.length===16)continue;let sh=p._bbShape||(p._bbShape=(p.shape?(typeof p.shape==='function'?p.shape(Sh):p.shape):(p.mesh?(()=>{const b=K.bbox(p.mesh);return{o:[[b.lo[0]/S,-b.lo[1]/S],[b.hi[0]/S,-b.lo[1]/S],[b.hi[0]/S,-b.hi[1]/S],[b.lo[0]/S,-b.hi[1]/S]]};})():null)));if(!sh)continue;const c=Math.cos(pv[2]||0),s=Math.sin(pv[2]||0);
+        bboxPts(sh.o.filter((_,k)=>sh.o.length<12||k%3===0).map(([x,y])=>[pv[0]+x*c-y*s,pv[1]+x*s+y*c]),lo,hi);}}}
   if(R)R.at(0);
   for(const gp of spec.ground||[])bboxPts([[gp[0]-12,gp[1]-12],[gp[0]+12,gp[1]+12]],lo,hi);
   for(const f of spec.fixed||[])bboxPts((typeof f.shape==='function'?f.shape(Sh):f.shape).o,lo,hi);
@@ -358,9 +360,52 @@ function poseOf(n,spec,phi,P,St){S=spec.S||0.3;const R=spec._R;const g=R?R.at(ph
   const belts=[];for(const r of (spec.ropes?spec.ropes(g,R&&R.sim):[])){const z=r.z??(zl(r.layer||0)+TH/2);belts.push({pts:r.pts.map(p=>{const q=[p[0]*S,-p[1]*S,(p[2]!==undefined?p[2]:z)];return UP?M4.apply(UP,q):q;}),r:r.r||1.2,closed:!!r.closed,travel:r.travel});}
   let read='';try{read=spec.read?spec.read(g,R.sim):(R?`${R.sim.outLabel||'output'}: ${(+R.sim.output()).toFixed(2)}`:'');}catch(e){}
   return{inst,belts,read};}
-return{def,Sh,zl,place,mm,get S(){return S;},TH,GAP,BT,PINR,BORER,CAPR,ext,runner,gearOutline};
+/* ready-made meshes (mm, own frame, z up from 0) */
+const Mesh={
+  /* grooved pulley for cord: radius at the cord centre R (mm), height H */
+  pulley(R,H=7,o={}){const rb=o.bore??BORER,Ro=R+1.6,g=R-1.2,h=H;const prof=[[rb,0],[Ro,0],[Ro,h/2-2.2],[g,h/2-0.7],[g,h/2+0.7],[Ro,h/2+2.2],[Ro,h],[rb,h]];const m=[lathe(prof,72)];
+    if(o.spokes!==false&&R>9){/* raised spoke ribs on top for a visible turning cue */for(let i=0;i<3;i++){const a=i*TAU/3;m.push(xfz(box(Math.max(2,g-rb-3),1.6,h,h+1),(g+rb)/2,0,a));}}return merge(...m);},
+  /* stepped (multi-groove) pulley: radii bottom→top */
+  stepped(Rs,H=6){const rb=BORER,prof=[[rb,0]];let z=0;for(const R of Rs){const Ro=R+1.6,g=R-1.2;prof.push([Ro,z],[Ro,z+H/2-2],[g,z+H/2-0.6],[g,z+H/2+0.6],[Ro,z+H/2+2],[Ro,z+H]);z+=H;}prof.push([rb,z]);return lathe(prof,72);},
+  box(w,d,h,cx=0,cy=0){return box(w,d,0,h,cx,cy);},
+  cylZ(r,h,n=40){return cyl(r,0,h,n);}
+};
+function xfz(m,x,y,a){return K.xf(m,M4.mul(M4.Rz(a),M4.T(x,y,0)));}
+return{def,Sh,Mesh,zl,place,mm,get S(){return S;},TH,GAP,BT,PINR,BORER,CAPR,ext,runner,gearOutline};
 })();
 window.PK=PK;
+/* ===== 3D layouts: models whose simulation already works in 3D world coordinates (px, z up), e.g. belts between shafts at right angles.
+   items: pulleys [{K (circ3), w, ang(phi), role}], belt points. Supports are generated: posts for upright axles, standing brackets for level ones. */
+PK.def3=function(n,spec){const MODELS=window.CAD.MODELS;const PI=Math.PI;const {M4,merge,cyl,box,tubeSolid,prism}=K;
+  const S=spec.S||0.3,PH=7,G=0.5,PINR=2,CAPR=4.2,CAPH=3;
+  MODELS[n]={summary:spec.summary,cam:spec.cam,hardware:spec.hardware||[],steps:spec.steps,
+    parts(){const R=PK.runner(n);this._R=R;R.at(0);const sim=R.sim,geo=spec.geo(sim);this._geo=geo;
+      let zmin=1e9;for(const b of geo.pulleys){zmin=Math.min(zmin,b.K.c[2]-b.K.r*Math.hypot(b.K.n[0],b.K.n[1]));}
+      const zoff=-zmin*S+(spec.lift??12);this._z=zoff;const W=p=>[p[0]*S,p[1]*S,p[2]*S+zoff];
+      const out=[],base=[];let lo=[1e9,1e9],hi=[-1e9,-1e9];const ext=(x,y,r)=>{lo=[Math.min(lo[0],x-r),Math.min(lo[1],y-r)];hi=[Math.max(hi[0],x+r),Math.max(hi[1],y+r)];};
+      this._sup=[];
+      geo.pulleys.forEach((b,i)=>{const c=W(b.K.c),r=b.K.r*S,nz=Math.abs(b.K.n[2]);ext(c[0],c[1],r+6);
+        out.push({id:'p'+i,name:b.name||(i===0?'Driving pulley':'Driven pulley'),role:b.role||(i===0?'driver':(b.guide?'link':'driven')),mesh:PK.Mesh.pulley(r,PH)});
+        if(nz>0.9){/* upright axle: boss + pin from the base */const zb=c[2]-PH/2-G;base.push(cyl(5,4,zb,32,c[0],c[1]),cyl(PINR,zb,c[2]+PH/2+G+CAPH,24,c[0],c[1]));this._sup.push({cap:[c[0],c[1],c[2]+PH/2+G]});}
+        else{/* level axle: a bracket plate behind the pulley, printed flat, glued upright onto the base */const nn=b.K.n;const cz=c[2]-4;
+          const h=cz+12,w=Math.max(24,2*r*0.6);const plate=merge(box(w,h,0,3,0,h/2),cyl(5,3,3+G,24,0,cz),cyl(PINR,3,3+G+PH+G+CAPH,24,0,cz));
+          out.push({id:'br'+i,name:'Bracket',role:'frame',mesh:plate,note:'glue upright on the base, pin toward the pulley'});
+          const back=[c[0]-nn[0]*(PH/2+3+G),c[1]-nn[1]*(PH/2+3+G)];this._sup.push({br:'br'+i,c,n:nn});
+          ext(back[0],back[1],w/2+4);}});
+      const m=8;const pw=hi[0]-lo[0]+2*m,ph=hi[1]-lo[1]+2*m;base.unshift(prism(K.rrect(pw,ph,6,6,(lo[0]+hi[0])/2,(lo[1]+hi[1])/2),[],0,4));
+      out.unshift({id:'base',name:'Base plate',role:'frame',mesh:merge(...base)});
+      out.push({id:'cap',name:'Pin cap',role:'small',qty:geo.pulleys.length,mesh:tubeSolid(CAPR,1.95,0,CAPH,32)});
+      if(spec.belt!==false){let L=0;const bp=geo.belt;for(let i=1;i<bp.length;i++)L+=Math.hypot(bp[i][0]-bp[i-1][0],bp[i][1]-bp[i-1][1],bp[i][2]-bp[i-1][2]);this._L=L*S;}
+      return out;},
+    pose(phi){const R=this._R,geo=this._geo;R.at(phi);const W=p=>[p[0]*S,p[1]*S,p[2]*S+this._z];const inst=[['base',M4.id()]];
+      geo.pulleys.forEach((b,i)=>{const c=W(b.K.c);const o=[c[0]-b.K.n[0]*PH/2,c[1]-b.K.n[1]*PH/2,c[2]-b.K.n[2]*PH/2];inst.push(['p'+i,M4.mul(M4.frame(o,b.K.n,b.K.u),M4.Rz(b.ang(phi)))]);});
+      for(const s of this._sup){if(s.br){const nn=[s.n[0],s.n[1],0],up=[0,0,1],xx=[up[1]*nn[2]-up[2]*nn[1],up[2]*nn[0]-up[0]*nn[2],up[0]*nn[1]-up[1]*nn[0]];
+          const bk=[s.c[0]-nn[0]*(PH/2+3+G),s.c[1]-nn[1]*(PH/2+3+G),4];
+          inst.push([s.br,[xx[0],xx[1],xx[2],0, up[0],up[1],up[2],0, nn[0],nn[1],nn[2],0, bk[0],bk[1],bk[2],1]]);
+          inst.push(['cap',M4.frame([s.c[0]+nn[0]*(PH/2+G),s.c[1]+nn[1]*(PH/2+G),s.c[2]],nn)]);}
+        else inst.push(['cap',M4.T(s.cap[0],s.cap[1],s.cap[2])]);}
+      return{inst,belts:[{pts:geo.belt.map(W),r:1.6,closed:true,travel:phi*(geo.A?geo.A.r*S:0)}],read:spec.read?spec.read(phi):`driver ${Math.round(phi*180/PI)%360}°`};},
+    get _belt(){return this._L;}};};
 
 })();
-window.CAD.INDEX={"001": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "011": [24]};
+window.CAD.INDEX={"001": [1, 2, 5, 6, 7, 8, 9, 10], "011": [3, 4, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 243]};

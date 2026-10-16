@@ -12,7 +12,7 @@ void main(){vec4 w=M*vec4(p,1.);vw=w.xyz;vn=mat3(M)*n;gl_Position=VP*w;}`;
 const FS=`precision mediump float;varying vec3 vn;varying vec3 vw;uniform vec3 col;uniform vec3 eye;uniform float alpha;
 void main(){vec3 N=normalize(vn);vec3 V=normalize(eye-vw);if(dot(N,V)<0.)N=-N;
 vec3 L1=normalize(vec3(.4,-.5,.8));vec3 L2=normalize(vec3(-.6,.4,.35));
-float d=max(dot(N,L1),0.)*.6+max(dot(N,L2),0.)*.22;float hemi=.5+.5*N.z;
+vec3 L3=normalize(vec3(.1,-1.,.25));float d=max(dot(N,L1),0.)*.55+max(dot(N,L2),0.)*.2+max(dot(N,L3),0.)*.22;float hemi=.5+.5*N.z;
 vec3 H=normalize(L1+V);float sp=pow(max(dot(N,H),0.),40.)*.22;
 vec3 c=col*(.32+.16*hemi+d)+sp;float rim=pow(1.-max(dot(N,V),0.),3.);gl_FragColor=vec4(c+rim*.05,alpha);}`;
 function hex(c){c=c.trim();if(c.startsWith('#')){if(c.length===4)c='#'+c[1]+c[1]+c[2]+c[2]+c[3]+c[3];return[1,3,5].map(i=>parseInt(c.slice(i,i+2),16)/255);}const m=c.match(/[\d.]+/g)||[200,200,200];return m.slice(0,3).map(v=>v/255);}
