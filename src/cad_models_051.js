@@ -27,10 +27,10 @@ const studShape=(rs)=>Sh.disk(rs);
   pose(phi,g,sim){const gap=(g.gap||0)*0.3,xb=1+gap,ab=sim?sim.a:phi,gx=xb+10,th=Math.asin(Math.max(-1,Math.min(1,(gx-13)/30)));
     return{a:U.at([-6,0,zc],[1,0,0],phi),b:K.M4.mul(U.at([xb+14,0,zc],[-1,0,0],-ab),K.M4.id()),sa:U.shaftAt([-33,0,zc],[1,0,0],phi),sb:U.shaftAt([37,0,zc],[1,0,0],ab),lv:K.M4.mul(K.M4.T(13,-36,zc-2),K.M4.Rz(-th)),k:U.at([-66,0,zc],[-1,0,0],-phi),ind:U.at([66,0,zc],[1,0,0],ab),col:[U.at([-24,0,zc],[1,0,0],phi),U.at([62,0,zc],[1,0,0],ab)],cap:K.M4.T(13,-36,zc+2.5)};},
   read:(phi,g)=>g.on?'studs in the holes · driven shaft turns':'thrown out',drive:'Turn the crank and push the lever to engage.'});}
-{const Z=18,m=2,Rp=18,d=PI/4,f=7,Hc=U.BT+Rp+8,zt=f*Math.cos(d),Lp=Rp/Math.tan(d);
+for(const NN of [53,87]){const Z=18,m=2,Rp=18,d=PI/4,f=7,Hc=U.BT+Rp+8,zt=f*Math.cos(d),Lp=Rp/Math.tan(d);
  const side=()=>K.merge(U.bevel(Rp,Z,d,f,{bore:'round'}),K.cyl(1.8,zt,zt+4,16,0,7),K.cyl(1.8,zt,zt+4,16,0,-7));
  const coll=K.merge(K.prism(K.circle(10,40),[U.octa(U.SH+0.12),K.circle(2.2,16,0,7),K.circle(2.2,16,0,-7)],0,9),K.prism(K.circle(12,40),[K.circle(10.2,40)],3,6));
- PK.defS(53,{summary:'Reversing gear: the upright bevel drives two bevels that run loose on the level shaft, so they turn opposite ways. A double clutch slides on the octagonal shaft between them; push it left or right and its holes catch the studs on one bevel or the other, and the shaft turns forward or backward.',cam:{yaw:0.6,pitch:0.45},
+ PK.defS(NN,{summary:NN===87?'Self-reversing gear (shown with the reversing clutch it uses): the upright bevel drives two loose bevels opposite ways and the double clutch locks one or the other to the shaft. In Brown’s machine a weighted lever throws the clutch over at each end of the travel.':'Reversing gear: the upright bevel drives two bevels that run loose on the level shaft, so they turn opposite ways. A double clutch slides on the octagonal shaft between them; push it left or right and its holes catch the studs on one bevel or the other, and the shaft turns forward or backward.',cam:{yaw:0.6,pitch:0.45},
   base:()=>[U.plate(-74,-48,74,22),U.wall(-34,0,'x',[[0,Hc]]),U.wall(-60,0,'x',[[0,Hc]]),U.wall(34,0,'x',[[0,Hc]]),U.wall(60,0,'x',[[0,Hc]]),U.post(0,0,Hc-Lp+zt+0.5+3,Hc-Lp-0.5),U.post(-14,-34,Hc+2+3.5,Hc-2.5)],
   parts:[{id:'bl',name:'Left bevel, loose, with studs',role:'link',mesh:side()},{id:'br',name:'Right bevel, loose, with studs',role:'link',mesh:side()},{id:'bv',name:'Upright driving bevel with knob',role:'driver',mesh:K.merge(U.bevel(Rp,Z,d,f,{bore:'round'}),K.cyl(2.5,0,zt+0.01,8,13,0))},
     {id:'c',name:'Double clutch (holes both faces)',role:'link',mesh:coll},{id:'s',name:'Level shaft (output)',role:'driven',mesh:U.shaft(130)},{id:'lv',name:'Clutch lever',role:'link',mesh:K.merge(K.prism(K.hull([...K.circle(5,24),...K.circle(3.5,24,14,26),...K.circle(4,24,-6,-22)]),[K.circle(U.SHB,24)],0,4),K.cyl(3,4,14,20,-6,-22))},
@@ -73,7 +73,7 @@ function leverPawlModel(n){const sim=window.MB.SIMS[n];if(!sim||!sim.o)return;co
       const T=tip(ha);out.h=[HQ[0],HQ[1],Math.atan2(T[1]-HQ[1],T[0]-HQ[0])];
       if(o.crank){const pin=[Cc[0]+40*Math.cos(g.phi),Cc[1]+40*Math.sin(g.phi)],la=-PI/2+g.a,E=[O[0]+L*Math.cos(la),O[1]+L*Math.sin(la)];out.cd=[Cc[0],Cc[1],g.phi];out.rod=[pin[0],pin[1],Math.atan2(E[1]-pin[1],E[0]-pin[0])];}
       return out;},drive:o.crank?'Turn the crank disk by its knob.':'Rock the lever by its knob.'});}
-for(const n of [73,75,79])leverPawlModel(n);
+for(const n of [73,75,79,83,155,235,284,415])leverPawlModel(n);
 /* ---------- double-pawl lever (77, 78) ---------- */
 for(const n of [77,78]){const sim=window.MB.SIMS[n];if(!sim)continue;const C0=sim.Cc,A=sim.A,N=sim.N,sawR=window.MB.sawR;const H0=sim.H(0);const LaH=Math.hypot(H0[0]-A[0],H0[1]-A[1]);
   PK.def(n,{S:0.3,summary:'A lever hung beside the ratchet carries two pawls on one pin. On one stroke the upper pawl pushes the teeth, on the other the lower, hooked pawl pulls them, so the wheel keeps turning the same way on both strokes.',

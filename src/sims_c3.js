@@ -13,7 +13,7 @@ function solveLink(o,phi){const P=Object.assign({},o.fix);const k=o.speed||1;
     else if(t==='fn'){v=st[2](P,phi);}
     P[id]=v;}
   return P;}
-function link(num,o){return reg({num,outLabel:o.outLabel||'Output',concept:!!o.concept,params:o.params||[],
+function link(num,o){return reg({num,lo:o,outLabel:o.outLabel||'Output',concept:!!o.concept,params:o.params||[],
   reset(){this.trail=[];},
   update(phi){const oo=o.dyn?o.dyn.call(this,o):o;const P=solveLink(oo,phi);this.g={phi,P};if(o.trace){this.trail=this.trail||[];this.trail.push(P[o.trace]);if(this.trail.length>(o.tlen||320))this.trail.shift();}},
   output(){return o.out(this.g.P,this.g.phi);},
@@ -121,7 +121,7 @@ camFlat(86,{r:t=>70+55*mod(t,TAU)/TAU,label:'CAM DRAGS THE CATCH TO RAISE THE RO
 camFlat(400,{r:t=>80+30*smooth((Math.cos(t)+1)/2),label:'CAM LIFTS THE FEED BAR · spring returns it',concept:true});
 
 /* ---- groove cam with a swinging lever (exact intersection) ---- */
-function grooveLever(num,o){return reg({num,outLabel:'Lever angle, degrees',concept:!!o.concept,F:o.F||[620,150],L:o.L||300,
+function grooveLever(num,o){return reg({num,o,outLabel:'Lever angle, degrees',concept:!!o.concept,F:o.F||[620,150],L:o.L||300,
   reset(){this.prev=null;},
   update(phi){const O=[300,290],a=phi;let best=null,bd=1e9;const n=360;let last=null;
     for(let i=0;i<=n;i++){const t=i/n*TAU,r=o.r(t),p=[O[0]+r*Math.cos(t+a),O[1]+r*Math.sin(t+a)];const f=Math.hypot(p[0]-this.F[0],p[1]-this.F[1])-this.L;if(last&&Math.sign(f)!==Math.sign(last.f)){const k=last.f/(last.f-f),q=[last.p[0]+(p[0]-last.p[0])*k,last.p[1]+(p[1]-last.p[1])*k];const d=this.prev?Math.hypot(q[0]-this.prev[0],q[1]-this.prev[1]):q[0];if(d<bd){bd=d;best=q;}}last={p,f};}
@@ -205,10 +205,10 @@ reg({num:348,outLabel:'Slide position, mm',concept:true,
 
 /* ---- racks, frames, double racks ---- */
 function rackFrame(num,o){return reg({num,outLabel:o.outLabel||'Frame position, mm',concept:!!o.concept,
-  update(phi){const u=mod(phi,TAU)/TAU;const tri=u<0.5?-1+4*u:3-4*u;const x=o.altGear?0:tri*120;const top=u<0.5;this.g={phi,x,top,tri};},output(){return o.altGear?this.g.tri*120/50*180/PI:this.g.x;},
-  draw(){const g=this.g,P=[400,270],rp=50,X=400+g.x;const H=(rp+14),gap=g.top?0:1;const yT=P[1]-H-(g.top?0:12),yB=P[1]+H+(g.top?12:0);
+  update(phi){const u=mod(phi,TAU)/TAU;const tri=u<0.5?-1+4*u:3-4*u;const x=o.altGear?0:tri*50*PI/2;const top=u<0.5;this.g={phi,x,top,tri};},output(){return o.altGear?this.g.tri*120/50*180/PI:this.g.x;},
+  draw(){const g=this.g,P=[400,270],rp=50,X=400+g.x;const H=(rp+6.25),gap=g.top?0:1;const yT=P[1]-H-(g.top?0:12),yB=P[1]+H+(g.top?12:0);
     ctx.beginPath();ctx.rect(X-260,yT-30,520,yB-yT+60);ctx.rect(X-250,yT,500,yB-yT);paint(C['steel-fill'],C.ink);
-    const len=o.part?260:500;for(const [y,dir] of [[yT,1],[yB,-1]]){for(let i=0;i<len/20;i++){const x=X-len/2+i*20;poly([[x,y],[x+6,y+dir*12],[x+14,y+dir*12],[x+20,y]]);ctx.closePath();paint(C['steel-fill'],C.ink,.9);}}
+    const len=o.part?260:500;const mm=5,pp=PI*mm,c0=X+(g.top?0:pp/2);for(const [y,dir] of [[yT,1],[yB,-1]]){const yp=y+dir*1.25*mm,pts=rackTeeth(X-len/2,X+len/2,c0,pp,yp,mm,dir>0);poly([[X-len/2,y],...pts,[X+len/2,y]]);ctx.closePath();paint(C['steel-fill'],C.ink,.9);}
     const ga=o.altGear?g.tri*2.4:g.phi;drawGear(P[0],P[1],rp,20,ga,C['brass-fill'],{bore:6});pivot(P[0],P[1],5);
     if(o.cam){const c=[P[0],P[1]+170];ctx.beginPath();ctx.ellipse(c[0],c[1],40,26,g.phi,0,TAU);paint(C.part,C.ink);}
     label(o.label,400,490,'center');label(g.top?'UPPER RACK IN MESH':'LOWER RACK IN MESH',400,40,'center');},
@@ -237,9 +237,9 @@ function screwShaft(x0,x1,y,r,ang,lead){ctx.beginPath();ctx.rect(x0,y-r,x1-x0,2*
 function screwSlide(num,o){return reg({num,outLabel:'Slide position, mm',concept:!!o.concept,params:o.params||[],
   reset(){this.x=0;this.last=null;this.dir=1;},
   update(phi){if(this.last===null)this.last=phi;const d=phi-this.last;this.last=phi;const lead=(this.P.lead||o.lead||16);
-    if(o.kind==='traverse'){this.x+=this.dir*d/TAU*lead*2;if(this.x>200){this.x=200;this.dir=-1;}if(this.x<-200){this.x=-200;this.dir=1;}}else{this.x=lead*phi/TAU;if(o.wrap)this.x=mod(this.x+200,400)-200;}
-    this.g={phi,lead};},output(){return this.x;},
-  draw(){const g=this.g,y=280,X=400+this.x;if(o.kind==='traverse'){screwShaft(150,650,y-30,14,g.phi,24);screwShaft(150,650,y+30,14,-g.phi,24);ctx.save();ctx.strokeStyle=C.ink;ctx.restore();}else screwShaft(150,650,y,18,g.phi,g.lead);
+    let th=phi;if(o.kind==='traverse'){this.x+=this.dir*d/TAU*lead*2;if(this.x>200){this.x=200;this.dir=-1;}if(this.x<-200){this.x=-200;this.dir=1;}}else{const A=180/lead*TAU;th=A*Math.sin(phi/A);this.x=lead*th/TAU;}
+    this.g={phi,lead,th};},output(){return this.x;},
+  draw(){const g=this.g,y=280,X=400+this.x;if(o.kind==='traverse'){screwShaft(150,650,y-30,14,g.phi,24);screwShaft(150,650,y+30,14,-g.phi,24);ctx.save();ctx.strokeStyle=C.ink;ctx.restore();}else screwShaft(150,650,y,18,g.th,g.lead);
     ctx.beginPath();ctx.rect(110,y-60,30,120);ctx.rect(660,y-60,30,120);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(X-40,y-50,80,100);paint(C['steel-fill'],C.ink);
     if(o.kind==='traverse'){label(this.dir>0?'NUT ON THE RIGHT-HAND SCREW':'NUT ON THE LEFT-HAND SCREW',400,140,'center');}
     if(o.gears){drawGear(90,y+120,40,16,g.phi*2,C.part,{bore:4});drawGear(90,y+40,40,16,-g.phi*2,C['brass-fill'],{bore:4});}
@@ -263,7 +263,7 @@ function wormWheel(num,o){return reg({num,outLabel:'Wheel turns',concept:!!o.con
     label(o.label,400,30,'center');},
   reads(){return[['Ratio',`${o.z||30} : 1`],['Reversible','no · the wheel cannot drive the worm']];}});}
 wormWheel(104,{label:'SCREW AND WHEEL'});wormWheel(195,{rolls:true,label:'WORM BETWEEN TWO WHEELS DRIVES THE FEED ROLLS',concept:true});wormWheel(207,{two:true,rolls:true,label:'TWIN WORMS AND WORM WHEELS',concept:true});
-wormWheel(275,{rack:true,label:'WORM DRIVES THE RACK'});wormWheel(143,{label:'WORM ON A SLIDING SHAFT · the wheel rod gives the traverse',concept:true});
+wormWheel(275,{rack:true,label:'WORM DRIVES THE RACK'});
 
 reg({num:167,outLabel:'Drum turns',
   update(phi){const u=mod(phi,TAU)/TAU;const x=u<0.5?-1+4*u:3-4*u;this.g={phi,x:x*140};},output(){return this.g.phi/TAU;},

@@ -193,9 +193,12 @@ PK.U=(()=>{const {M4,prism,cyl,merge,circle,box}=K,PI=Math.PI,TAU=2*PI,BT=PK.BT;
       for(let k=0;k<=n;k++){const z=zt*k/n,s=(Hx-z)/Hx;secs.push({o:base.map(p=>[p[0]*s,p[1]*s,z]),h:[hole,...xh].map(h=>h.map(p=>[p[0],p[1],z]))});}
       let m=K.loftS(secs);const hub=o.hub??0;if(hub>0)m=merge(m,prism(circle(hub,40),[hole],zt,zt+(o.hubH??4)));return m;},
     /* worm: pitch radius rp, axial pitch p (single start), length L, printed standing */
-    worm(rp,p,L,o={}){const m=p/PI,ad=m,de=1.2*m,n=64,secs=[],dz=p/16;const prof=u=>{u=((u%p)+p)%p/p;const x=Math.abs(u-0.5);return x<0.15?-de:x>0.35?ad:-de+(ad+de)*(x-0.15)/0.2;};
+    worm(rp,p,L,o={}){const m=o.depth?o.depth:p/PI,ad=m,de=1.2*m,n=64,secs=[],dz=p/16;const prof=u=>{u=((u%p)+p)%p/p;const x=Math.abs(u-0.5);return x<0.15?-de:x>0.35?ad:-de+(ad+de)*(x-0.15)/0.2;};
       for(let z=0;z<=L+1e-9;z+=dz){const ring=[];for(let i=0;i<n;i++){const t=i/n*TAU,r=rp+prof(z-p*t/TAU);ring.push([r*Math.cos(t),r*Math.sin(t),z]);}secs.push({o:ring,h:[octa(SH+0.12).map(q=>[q[0],q[1],z])]});}return K.loftS(secs);},
     /* straight rack along x, pitch line at y=0, teeth up (+y), printed flat */
+    /* nut block w×h (×L long, along z) with an internal thread matching worm(rp,p) */
+    nut(rp,p,L,w,h,o={}){const m=o.depth?o.depth:p/PI,ad=m,de=1.2*m,n=64,secs=[],dz=p/16;const prof=u=>{u=((u%p)+p)%p/p;const x=Math.abs(u-0.5);return x<0.15?-de:x>0.35?ad:-de+(ad+de)*(x-0.15)/0.2;};const box=[[-w/2,-h/2],[w/2,-h/2],[w/2,h/2],[-w/2,h/2]];
+      for(let z=0;z<=L+1e-9;z+=dz){const ring=[];for(let i=0;i<n;i++){const t=i/n*TAU,r=rp+prof(z-p*t/TAU)+0.35+0.0*i;ring.push([r*Math.cos(t),r*Math.sin(t),z]);}secs.push({o:box.map(q=>[q[0],q[1],z]),h:[ring]});}return K.loftS(secs);},
     rack(L,m,depth,h,c0=0){const s=PK._S();PK._S(1);const sh=PK.Sh.rack(-L/2,L/2,m,depth,{c0});PK._S(s);return prism(sh.o.map(p=>[p[0],-p[1]]),[],0,h);},
     shaft(L,r=SH){/* lying along x, centred, printed flat on a facet */return K.xf(prism(octa(r),[],-L/2,L/2),M4.mul(M4.T(0,0,r*Math.cos(PI/8)),M4.Ry(PI/2)));},
     /* pose helpers: a part modelled around the z axis, placed with its z axis along n at o, turned by a */
@@ -221,3 +224,42 @@ PK.defS=function(n,spec){const MODELS=window.CAD.MODELS;MODELS[n]={summary:spec.
     for(const p of spec.parts)out.push(Object.assign({role:'link'},p));return out;},
   pose(phi){const g=this._R?this._R.at(phi):{phi};const ps=spec.pose(phi,g,this._R&&this._R.sim,this._P||{});const inst=[['base',K.M4.id()]];for(const id in ps){const v=ps[id];if(!v)continue;if(v.length===16&&typeof v[0]==='number')inst.push([id,v]);else for(const M of v)inst.push([id,M]);}
     let read='';try{read=spec.read?spec.read(phi,g):'';}catch(e){}return{inst,belts:spec.belts?spec.belts(phi,g):[],read};}};};
+/* ===== shared model builders used by several chunks ===== */
+PK.Lib=(()=>{const Sh=PK.Sh,PI=Math.PI,TAU=2*PI;
+  const pxPoly=(pts,holes=[[0,0]])=>({o:pts,h:holes.map(h=>Sh.hole(h[0],h[1],h[2]))});
+  function offsetLoop(pts,d){const n=pts.length,o=[];let A=0;for(let i=0;i<n;i++){const a=pts[i],b=pts[(i+1)%n];A+=a[0]*b[1]-b[0]*a[1];}const s=A>0?1:-1;for(let i=0;i<n;i++){const p=pts[(i-1+n)%n],q=pts[(i+1)%n],t=[q[0]-p[0],q[1]-p[1]],l=Math.hypot(t[0],t[1])||1;o.push([pts[i][0]+s*t[1]/l*d,pts[i][1]-s*t[0]/l*d]);}return o;}
+  function pip(pt,poly){let c=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if((a[1]>pt[1])!==(b[1]>pt[1])&&pt[0]<(b[0]-a[0])*(pt[1]-a[1])/(b[1]-a[1])+a[0])c=!c;}return c;}
+  function groovedPlate(outline,center,w,holes=[[0,0]]){const out=offsetLoop(center,w/2),inn=offsetLoop(center,-w/2),area=q=>{let a=0;for(let i=0;i<q.length;i++){const u=q[i],v=q[(i+1)%q.length];a+=u[0]*v[1]-v[0]*u[1];}return Math.abs(a);};const big=area(out)>area(inn)?out:inn,small=big===out?inn:out;
+    const hin=holes.filter(h=>pip(h,small)),hout=holes.filter(h=>!pip(h,big)),H=hs=>hs.map(h=>Sh.hole(h[0],h[1],h[2]));return K.merge(PK.ext({o:outline,h:H(holes)},0,2.2),PK.ext({o:outline,h:[...H(hout),big]},2.2,PK.TH),PK.ext({o:small,h:H(hin)},2.2,PK.TH));}
+  /* camFlat simulations: cam + flat-foot follower or yoke */
+  function camFlatModel(n,summary){const sim=window.MB.SIMS[n];if(!sim||!sim.shape)return;const sh=sim.shape(),O=[330,300];const yoke=/Yoke|Valve/.test(sim.outLabel||'');
+    const parts=[{id:'c',name:'Cam',role:'driver',layer:0,shape:pxPoly(sh),bosses:[[sh[0][0]*0.4,sh[0][1]*0.4,12,3.5]]}];
+    if(yoke){let ext=0;for(let i=0;i<72;i++){const a=i/72*TAU;let mx=-1e9,mn=1e9;for(const [x,y] of sh){const X=x*Math.cos(a)-y*Math.sin(a);mx=Math.max(mx,X);mn=Math.min(mn,X);}ext=Math.max(ext,mx-mn);}
+      const W=ext,Hh=Math.max(...sh.map(p=>Math.hypot(p[0],p[1])))+14;parts.push({id:'y',name:'Yoke with rods',role:'driven',layer:0,shape:S=>({o:[[-16,-Hh-16],[W+16,-Hh-16],[W+16,-16],[W+260,-16],[W+260,16],[W+16,16],[W+16,Hh+16],[-16,Hh+16],[-16,16],[-200,16],[-200,-16],[-16,-16]],h:[[[0,-Hh],[W,-Hh],[W,Hh],[0,Hh]]]})});
+      PK.def(n,{S:0.3,summary,parts,ground:[[O[0],O[1],0,0]],fixed:[[-200,-24],[-200,24],[W+200,-24],[W+200,24]].map(([dx,dy])=>({shape:S=>S.rect(70,8,O[0]+dx,O[1]+dy),l1:0})),pose(g){return{c:[O[0],O[1],g.a],y:[O[0]+g.hxn,O[1],0]};},drive:'Turn the cam by its knob.'});}
+    else{parts.push({id:'f',name:'Flat-foot follower rod',role:'driven',layer:0,shape:S=>({o:[[-60,0],[60,0],[60,-16],[8,-16],[8,-190],[-8,-190],[-8,-16],[-60,-16]],h:[]})});
+      PK.def(n,{S:0.3,summary,parts,ground:[[O[0],O[1],0,0]],fixed:[{shape:S=>S.rect(10,40,O[0]-25,150),l1:0},{shape:S=>S.rect(10,40,O[0]+25,150),l1:0}],pose(g){return{c:[O[0],O[1],g.a],f:[O[0],O[1]-g.hy,0]};},drive:'Turn the cam by its knob; the follower rises and falls back.'});}}
+  /* link() simulations: every bar, slotted bar, block and wheel becomes a printed part; joints get printed pins on the lowest part */
+  function linkModel(n,summary,opt={}){const sim=window.MB.SIMS[n];if(!sim||!sim.lo)return;const o=sim.lo,R=PK.runner(n);const P0=R.at(0.3).P;R.at(0);
+    const items=[];let L=0;const touch={};const add=(pt,layer,id,isRun)=>{(touch[pt]=touch[pt]||[]).push({layer,id,isRun});};
+    if(o.wheel){const [c,r]=o.wheel;items.push({kind:'wheel',id:'w',c,r,layer:L});add(c,L,'w');L++;}
+    for(const [i,b] of (o.bars||[]).entries()){const len=Math.hypot(P0[b[1]][0]-P0[b[0]][0],P0[b[1]][1]-P0[b[0]][1]);if(len<4)continue;items.push({kind:'bar',id:'b'+i,a:b[0],b:b[1],w:b[2]||10,len,layer:L});add(b[0],L,'b'+i);add(b[1],L,'b'+i);L++;}
+    for(const [i,s] of (o.slots||[]).entries()){items.push({kind:'slot',id:'s'+i,a:s[0],b:s[1],len:s[2],st:s[3]||30,layer:L});add(s[0],L,'s'+i);add(s[1],L,'s'+i,true);L++;}
+    for(const [i,bl] of (o.blocks||[]).entries()){items.push({kind:'block',id:'k'+i,p:bl[0],w:bl[1],h:bl[2],layer:L});add(bl[0],L,'k'+i);L++;}
+    const fixedIds=Object.keys(o.fix||{}),pins={},ground=[];
+    for(const pt in touch){const T=touch[pt].sort((a,b)=>a.layer-b.layer),top=T[T.length-1].layer;if(fixedIds.includes(pt)){const lo=T[0].layer;ground.push([o.fix[pt][0],o.fix[pt][1],lo,top]);continue;}
+      if(T.length<2)continue;const owner=T.find(t=>!t.isRun)||T[0];if(owner.layer===top&&T.length>1){/* owner must be below: use the lowest */}const own=T[0].isRun?T.find(t=>!t.isRun):T[0];if(!own)continue;(pins[own.id]=pins[own.id]||[]).push({pt,top});}
+    const parts=[];for(const it of items){let shape,role='link',pinsL=[];
+      if(it.kind==='wheel'){shape=S=>({o:S.circle(it.r,96),h:[S.hole(0,0),...[0,1,2,3,4].map(k=>S.circle(it.r*0.24,24,it.r*0.58*Math.cos(k*TAU/5+0.6),it.r*0.58*Math.sin(k*TAU/5+0.6)))]});role='driver';}
+      else if(it.kind==='bar')shape=S=>S.bar(it.len,Math.max(it.w,12));
+      else if(it.kind==='slot')shape=S=>({o:K.hull([...S.circle(13,24,0,0),...S.circle(13,24,it.len,0)]),h:[S.hole(0,0),S.slotPts(it.st,0,it.len-14,0,(PK.BORER*2+0.6)/PK.S)]});
+      else shape=S=>S.rect(it.w,it.h,0,0,[[0,0]]);
+      for(const pn of pins[it.id]||[]){let lx=0,ly=0;if(it.kind==='bar'||it.kind==='slot'){if(pn.pt===it.b){lx=it.len;}}else if(it.kind==='wheel'){const c=P0[it.c],q=P0[pn.pt];lx=Math.hypot(q[0]-c[0],q[1]-c[1]);}pinsL.push([lx,ly,pn.top]);}
+      if(it.kind==='wheel'){/* pins on the wheel: placed at their angle at phi=0.3 */const c=P0[it.c];pinsL=(pins[it.id]||[]).map(pn=>{const q=P0[pn.pt],a=Math.atan2(q[1]-c[1],q[0]-c[0])-0.3*(o.speed||1);const r=Math.hypot(q[0]-c[0],q[1]-c[1]);return[r*Math.cos(a),r*Math.sin(a),pn.top];});}
+      parts.push({id:it.id,name:it.kind==='wheel'?'Flywheel / crank disk':it.kind==='bar'?`Link ${it.a}–${it.b}`:it.kind==='slot'?`Slotted lever ${it.a}`:`Slide block ${it.p}`,role,layer:it.layer,shape,pins:pinsL,bosses:it.kind==='wheel'?[[-it.r*0.8,0,14,3.5]]:undefined});}
+    if(!o.wheel&&parts.length){parts[0].role='driver';}
+    const fixed=(o.guides||[]).map(gd=>({shape:S=>S.rect(gd[2],gd[3],gd[0]+gd[2]/2,gd[1]+gd[3]/2),l1:Math.max(0,L-1)}));
+    PK.def(n,{S:opt.S||0.3,summary,parts,ground,fixed,cycle:opt.cycle,
+      pose(g){const P=g.P,out={};for(const it of items){if(it.kind==='wheel')out[it.id]=[P[it.c][0],P[it.c][1],g.phi*(o.speed||1)];else if(it.kind==='block')out[it.id]=[P[it.p][0],P[it.p][1],0];else out[it.id]=[P[it.a][0],P[it.a][1],Math.atan2(P[it.b][1]-P[it.a][1],P[it.b][0]-P[it.a][0])];}return out;},
+      drive:opt.drive||'Turn the driving crank by its knob and follow the links.'});}
+  return{pxPoly,offsetLoop,pip,groovedPlate,camFlatModel,linkModel};})();

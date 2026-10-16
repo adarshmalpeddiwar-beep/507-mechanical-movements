@@ -144,7 +144,7 @@ reg({num:81,outLabel:'Rack position, mm',
   output(){return this.g.y;},
   draw(){const g=this.g,G=[330,200],r=60,m=6,p=PI*m,x=G[0]+r;
     const tau=TAU/20,pts=gearPts(G[0],G[1],r,20,g.phi-TAU/3+tau/2,false,g.phi-TAU/3+0.01,g.phi-0.01);poly(pts);ctx.arc(G[0],G[1],r-1.25*m-1,g.phi,g.phi-TAU/3+TAU);ctx.closePath();circ(G[0],G[1],8,false);paint(C['brass-fill'],C.ink);pivot(G[0],G[1],6);
-    const ty=y=>y;const pts2=[];const kmin=Math.ceil((40-G[1]-g.y)/p),kmax=Math.floor((360-G[1]-g.y)/p);for(let k=kmin;k<=kmax;k++){const c=G[1]+g.y+k*p;for(const [f,t] of PROF)pts2.push([t?x-m:x+1.25*m,c+f*p]);}
+    const ty=y=>y;const pts2=[];const kmin=Math.ceil((44-G[1])/p),kmax=Math.floor((372-G[1])/p);for(let k=kmin;k<=kmax;k++){const c=G[1]+g.y+k*p;for(const [f,t] of PROF)pts2.push([t?x-m:x+1.25*m,c+f*p]);}
     poly([[x+1.25*m+22,40+g.y],[x+1.25*m,40+g.y],...pts2,[x+1.25*m,380+g.y],[x+1.25*m+22,380+g.y]]);ctx.closePath();paint(C['steel-fill'],C.ink);
     springZ(x+20,380+g.y,x+20,480,10,8);ground(x+20,480,40);
     label('TEETH ON A THIRD OF THE GEAR',G[0],G[1]+110,'center');label('SPRING PULLS THE RACK BACK',x+60,440);},

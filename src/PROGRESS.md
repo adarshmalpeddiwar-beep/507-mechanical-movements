@@ -36,4 +36,7 @@ fix them with attention to detail, and give EVERY mechanism a 3D-printable model
 - Template sims still to review when their numbers come up: stepper (364, 398), shifter, gearStyle, mangle (192-194,371), pinionFollower ok.
 - Tools: /home/claude/tools/simsrc.py N-M (print sim source), dbg2.js <chunk> <expr> (load a CAD chunk and eval).
 - Brown text: WebFetch https://dn760104.eu.archive.org/0/items/fivehundredseven00browiala/fivehundredseven00browiala_djvu.txt with prompt 'precise paraphrase of movements A through B'.
-- Next: 81+ (cad_models_081.js).
+- 81–115: 2D fixed (81 rack teeth, 82 one ratchet two treadles, 94 spiral/slot plates, 98 groove in the arm, 115 rack pitch, 84/139 rack frame pitch, screwSlide travels back and forth). Models in cad_models_081.js.
+- 116–150: 2D fixed 143 (worm on sliding frame). Models in cad_models_116.js incl. M119–M127 and generic link models (PK.Lib.linkModel) for all link() sims, governors (govModel in 116 chunk).
+- PK.Lib (cad_pk.js): pxPoly, offsetLoop, pip, groovedPlate, camFlatModel(n,summary), linkModel(n,summary). Use them from any chunk.
+- Next: 151+ (cad_models_151.js).
