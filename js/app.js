@@ -35,11 +35,9 @@ function home(){stopBench();
   const counts={};MV.forEach(m=>counts[m.c]=(counts[m.c]||0)+1);
   app.innerHTML=`
   <header class="hero">
-    <div>
-      <div class="eyebrow">Henry T. Brown · 1868 · interactive edition</div>
-      <h1>507 Mechanical <i>Movements</i></h1>
-      <p class="lede">Every movement from the classic engineering catalogue, explained in plain words with a note on where you still see it today. Run each simulation, change its proportions, or turn it by hand.</p>
-    </div>
+      <div class="eyebrow">Henry T. Brown · 1868 · Interactive edition</div>
+      <h1>507 Mechanical<br>Movements.</h1>
+      <p class="lede">The classic catalogue of how machines move, rebuilt so every movement runs. Turn them by hand, change their proportions, and print them in 3D.</p>
     <div class="stats">
       <div class="stat"><b>507</b><span>movements</span></div>
       <div class="stat"><b>${nAnim}</b><span>interactive</span></div>
@@ -71,7 +69,7 @@ function list(){const items=MV.filter(matches);$('#count').textContent=`${items.
   const grid=$('#grid');if(!items.length){grid.innerHTML=`<p class="empty">No movements match “${esc(state.q)}”. Try a simpler word such as gear, cam or pump.</p>`;return;}
   grid.innerHTML=items.map(m=>`<a class="card" href="#m${m.n}" aria-label="No. ${m.n}, ${esc(m.t)}">
     ${SIMS[m.n]?`<canvas class="thumb" data-n="${m.n}" aria-hidden="true"></canvas>`:`<div class="plateno" aria-hidden="true">${m.n}</div>`}
-    <div class="cbody"><div class="cn"><b>${m.n}</b><span>${hasCad(m.n)?'<span class="badge d3">3D print</span> ':''}${SIMS[m.n]?'<span class="badge">Interactive</span>':''}</span></div><div class="ct">${esc(m.t)}</div><div class="cc">${esc(CATNAME[m.c])}</div></div></a>`).join('');
+    <div class="cbody"><div class="cn"><b>No. ${m.n}</b><span>${hasCad(m.n)?'<span class="badge d3">3D print</span> ':''}${SIMS[m.n]?'<span class="badge">Interactive</span>':''}</span></div><div class="ct">${esc(m.t)}</div><div class="cc">${esc(CATNAME[m.c])}</div></div></a>`).join('');
   grid.querySelectorAll('canvas.thumb').forEach(c=>thumbObs.observe(c));}
 function footer(){return `<footer><p>Descriptions are summarised in plain English from Henry T. Brown, <i>Five Hundred and Seven Mechanical Movements</i> (New York, 1868), now in the public domain. Drawings and simulations are new interpretations, so proportions are illustrative. Brown's text for Nos. 262 and 263 was not available in the copy used.</p><p>Built by <a href="https://www.instagram.com/underdogbuilder/" target="_blank" rel="noopener">@underdogbuilder</a></p></footer>`;}
 
@@ -136,7 +134,7 @@ function startBench(sim){
     tctx.beginPath();B.trace.forEach(([t,v],i)=>i?tctx.lineTo(X(t),Y(v)):tctx.moveTo(X(t),Y(v)));tctx.lineTo(X(B.simT),h);tctx.lineTo(X(B.trace[0][0]),h);tctx.closePath();tctx.fillStyle=C['steel-fill'];tctx.globalAlpha=.5;tctx.fill();tctx.globalAlpha=1;
     tctx.beginPath();B.trace.forEach(([t,v],i)=>i?tctx.lineTo(X(t),Y(v)):tctx.moveTo(X(t),Y(v)));tctx.strokeStyle=C.steel;tctx.lineWidth=1.6*dpr;tctx.stroke();
     const [lt,lv]=B.trace[B.trace.length-1];tctx.beginPath();tctx.arc(X(lt),Y(lv),3.2*dpr,0,TAU);tctx.fillStyle=C.brass;tctx.fill();
-    tctx.font=`500 ${10*dpr}px "IBM Plex Mono", monospace`;tctx.fillStyle=C.muted;const f=v=>Math.abs(span)<5?v.toFixed(2):v.toFixed(0);tctx.textBaseline='top';tctx.fillText(f(hi),pad,pad*.5);tctx.textBaseline='bottom';tctx.fillText(f(lo),pad,h-pad*.5);}
+    tctx.font=`500 ${11*dpr}px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Helvetica Neue", Arial, sans-serif`;tctx.fillStyle=C.muted;const f=v=>Math.abs(span)<5?v.toFixed(2):v.toFixed(0);tctx.textBaseline='top';tctx.fillText(f(hi),pad,pad*.5);tctx.textBaseline='bottom';tctx.fillText(f(lo),pad,h-pad*.5);}
   function renderReads(){let r;try{r=sim.reads(B.vel);}catch(e){r=[];}const dl=$('#reads');if(!dl)return;if(B.readEls.length!==r.length){dl.innerHTML='';B.readEls=r.map(([k])=>{const dt=document.createElement('dt');dt.textContent=k;const dd=document.createElement('dd');dl.append(dt,dd);return[dt,dd];});}
     r.forEach(([k,v],i)=>{if(B.readEls[i][0].textContent!==k)B.readEls[i][0].textContent=k;if(B.readEls[i][1].textContent!==v)B.readEls[i][1].textContent=v;});}
   function params(){const box=$('#params');box.innerHTML='';if(!sim.params.length){$('#psec').hidden=true;return;}
@@ -168,5 +166,14 @@ document.addEventListener('keydown',e=>{if(bench&&bench.key)bench.key(e);});
 function route(){const m=(location.hash||'').match(/^#m(\d{1,3})$/);if(m){if(!bench&&location.hash!=='')store('scroll',window.scrollY);detail(+m[1]);}else home();}
 window.addEventListener('hashchange',()=>{if(!(/^#m\d+$/.test(location.hash)))home();else route();});
 window.addEventListener('scroll',()=>{if(!bench)store('scroll',window.scrollY);},{passive:true});
+/* ---------- light / dark ---------- */
+const tb=document.getElementById('themebtn'),ti=document.getElementById('themeico');
+const SUN='<circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.1M12 19.3v2.1M5.4 5.4l1.5 1.5M17.1 17.1l1.5 1.5M2.6 12h2.1M19.3 12h2.1M5.4 18.6l1.5-1.5M17.1 6.9l1.5-1.5"/>';
+const MOON='<path d="M20.4 14.6A8.4 8.4 0 0 1 9.4 3.6a8.4 8.4 0 1 0 11 11z"/>';
+function effDark(){const t=document.documentElement.dataset.theme;return t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches;}
+function syncIcon(){if(!tb)return;const d=effDark();ti.innerHTML=d?SUN:MOON;tb.setAttribute('aria-label',d?'Switch to light mode':'Switch to dark mode');tb.title=d?'Light mode':'Dark mode';}
+const savedTheme=store('theme');if(savedTheme==='light'||savedTheme==='dark')document.documentElement.dataset.theme=savedTheme;syncIcon();
+if(tb)tb.addEventListener('click',()=>{const nt=effDark()?'light':'dark';document.documentElement.dataset.theme=nt;store('theme',nt);syncIcon();});
+try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',syncIcon);}catch(e){}
 route();
 })();

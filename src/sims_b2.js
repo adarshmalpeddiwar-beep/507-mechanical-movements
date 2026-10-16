@@ -120,7 +120,7 @@ reg({num:76,outLabel:'Count',N:10,
   draw(){const g=this.g,S=[260,260],Wc=[470,260],N=this.N;
     circ(S[0],S[1],50);paint(C['brass-fill'],C.ink);const t=g.phi;bar(S[0],S[1],S[0]+105*Math.cos(t),S[1]+105*Math.sin(t),12,C['brass-fill']);pivot(S[0],S[1],6);
     sawWheel(Wc[0],Wc[1],g.w,N,72,100,C['steel-fill']);circ(Wc[0],Wc[1],55);paint(C.hi,C.ink);
-    ctx.save();ctx.font='500 34px "IBM Plex Mono", monospace';ctx.fillStyle=C.ink;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(mod(Math.round(g.k+g.s),100)).padStart(2,'0'),Wc[0],Wc[1]);ctx.restore();
+    ctx.save();ctx.font='600 34px -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, "Helvetica Neue", Arial, sans-serif';ctx.fillStyle=C.ink;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(mod(Math.round(g.k+g.s),100)).padStart(2,'0'),Wc[0],Wc[1]);ctx.restore();
     const dp=[Wc[0]+30,Wc[1]-150];springZ(dp[0],dp[1],Wc[0]+12,Wc[1]-96,8,5);label('DETENT SPRING',dp[0]+10,dp[1]-10);
     label('TAPPET ON SHAFT',S[0],S[1]+150,'center');label('COUNT WHEEL',Wc[0],Wc[1]+150,'center');},
   reads(){const g=this.g;return[['Shaft turns',`${(g.phi/TAU).toFixed(1)}`],['Counted',`${g.k}`],['Rule','one tooth per turn']];}});

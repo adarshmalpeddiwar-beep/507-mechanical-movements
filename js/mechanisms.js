@@ -9,7 +9,7 @@ function pivot(x,y,r=5.5){circ(x,y,r);paint(C.hi,C.ink,1.3);circ(x,y,1.7);paint(
 function capsule(x1,y1,x2,y2,r){const a=Math.atan2(y2-y1,x2-x1);ctx.moveTo(x1+r*Math.cos(a+PI/2),y1+r*Math.sin(a+PI/2));ctx.arc(x1,y1,r,a+PI/2,a+3*PI/2);ctx.arc(x2,y2,r,a-PI/2,a+PI/2);ctx.closePath();}
 function bar(x1,y1,x2,y2,w,fill){ctx.beginPath();capsule(x1,y1,x2,y2,w/2);paint(fill,C.ink);}
 function ground(x,y,w=36,up=false){ctx.save();ctx.strokeStyle=C.muted;ctx.lineWidth=1.1;ctx.beginPath();ctx.moveTo(x-w/2,y);ctx.lineTo(x+w/2,y);ctx.stroke();const s=up?-1:1;for(let i=0;i<6;i++){const xx=x-w/2+i*w/5+3;ctx.beginPath();ctx.moveTo(xx,y);ctx.lineTo(xx-6,y+7*s);ctx.stroke();}ctx.restore();}
-function label(t,x,y,align='left'){ctx.save();ctx.font='500 10.5px "IBM Plex Mono", ui-monospace, monospace';ctx.fillStyle=C.muted;ctx.textAlign=align;ctx.textBaseline='middle';ctx.fillText(t,x,y);ctx.restore();}
+function label(t,x,y,align='left'){ctx.save();ctx.font='500 11px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Helvetica Neue", Arial, sans-serif';ctx.fillStyle=C.muted;ctx.textAlign=align;ctx.textBaseline='middle';ctx.fillText(t,x,y);ctx.restore();}
 function leader(x1,y1,x2,y2){ctx.save();ctx.strokeStyle=C.muted;ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();circ(x2,y2,1.8);ctx.fillStyle=C.muted;ctx.fill();ctx.restore();}
 function callout(t,tx,ty,px,py,align='left'){leader(tx+(align==='left'?-4:4),ty,px,py);label(t,tx,ty,align);}
 function pitchArc(cx,cy,r,a0=0,a1=TAU){ctx.save();ctx.setLineDash([10,3,2,3]);ctx.strokeStyle=C.muted;ctx.globalAlpha=.6;ctx.lineWidth=.7;ctx.beginPath();ctx.arc(cx,cy,r,a0,a1);ctx.stroke();ctx.restore();}
@@ -1171,7 +1171,7 @@ reg({num:76,outLabel:'Count',N:10,
   draw(){const g=this.g,S=[260,260],Wc=[470,260],N=this.N;
     circ(S[0],S[1],50);paint(C['brass-fill'],C.ink);const t=g.phi;bar(S[0],S[1],S[0]+105*Math.cos(t),S[1]+105*Math.sin(t),12,C['brass-fill']);pivot(S[0],S[1],6);
     sawWheel(Wc[0],Wc[1],g.w,N,72,100,C['steel-fill']);circ(Wc[0],Wc[1],55);paint(C.hi,C.ink);
-    ctx.save();ctx.font='500 34px "IBM Plex Mono", monospace';ctx.fillStyle=C.ink;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(mod(Math.round(g.k+g.s),100)).padStart(2,'0'),Wc[0],Wc[1]);ctx.restore();
+    ctx.save();ctx.font='600 34px -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, "Helvetica Neue", Arial, sans-serif';ctx.fillStyle=C.ink;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(mod(Math.round(g.k+g.s),100)).padStart(2,'0'),Wc[0],Wc[1]);ctx.restore();
     const dp=[Wc[0]+30,Wc[1]-150];springZ(dp[0],dp[1],Wc[0]+12,Wc[1]-96,8,5);label('DETENT SPRING',dp[0]+10,dp[1]-10);
     label('TAPPET ON SHAFT',S[0],S[1]+150,'center');label('COUNT WHEEL',Wc[0],Wc[1]+150,'center');},
   reads(){const g=this.g;return[['Shaft turns',`${(g.phi/TAU).toFixed(1)}`],['Counted',`${g.k}`],['Rule','one tooth per turn']];}});

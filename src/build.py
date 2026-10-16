@@ -15,8 +15,8 @@ open('site/js/mechanisms.js','w').write(js)
 cad='(function(){\n'+open('src/cad_kernel.js').read()+'\n'+open('src/cad_view.js').read()+'\n'+''.join(open(f).read()+'\n' for f in sorted(glob.glob('src/cad_models_*.js')))+'})();\n'
 open('site/js/cad.js','w').write(cad)
 body=open('src/body.html').read()
-head_part,rest=body.split('<div class="wrap" id="app"></div>',1)
-full='<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n'+head_part.replace('<meta name="claude:viewport-fit-sides" content="cover">\n','')+'</head>\n<body>\n<div class="wrap" id="app"></div>\n'+rest+'</body>\n</html>\n'
+head_part,rest=body.split('<header class="topbar">',1);rest='<header class="topbar">'+rest
+full='<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n'+head_part.replace('<meta name="claude:viewport-fit-sides" content="cover">\n','')+'</head>\n<body>\n'+rest+'</body>\n</html>\n'
 open('site/index.html','w').write(full)
 open('artifact.html','w').write(body)
 print('ok',len(js))
