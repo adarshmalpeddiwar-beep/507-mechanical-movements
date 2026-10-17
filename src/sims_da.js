@@ -20,3 +20,17 @@ reg({num:271,outLabel:'Bar travel, mm',Pv:[400,150],arm:70,Lp:200,yt:312,p:24,
 /* 286 · Brown: a curved toe on a rocking shaft lifts the valve rod. The shaft rocks; the toe's curved back rolls under the rod's foot. */
 camFlat(286,{r:t=>{const u=mod(t+PI/2-0.25+PI,TAU)-PI;return Math.abs(u)<1.1?36+64*Math.cos(u/1.1*PI/2)**1.5:36;},label:'CURVED TOE ON A ROCKING SHAFT LIFTS THE VALVE ROD'});
 {const m=SIMS_NEW[286],up=m.update;m.update=function(phi){up.call(this,0.55*Math.sin(phi)-0.15);this.g.phi=phi;};}
+
+/* 320 · Huygens' endless chain: one loop over the going pulley A (on the clock) and the winding pulley B (with a click). The loop
+   carries the driving weight's pulley in one bight and a small counterweight in the other. Pulling down the free side over B raises
+   the weight, yet A is still pulled round all the while, so the clock keeps going while it is wound. */
+{const m=SIMS_NEW[320];
+ m.update=function(phi){const T=TAU*2,u=mod(phi,T)/T,wind=u<0.25;const k=Math.floor(phi/T);const drop=wind?(1-u/0.25):(u-0.25)/0.75;/* 0..1 of the weight's travel */
+   this.g={phi,wind,go:phi*0.3,yW:300+90*drop,b:(k+(wind?u/0.25:1))*TAU*0.9};};
+ m.draw=function(){const g=this.g,A=[300,140],B=[500,140],r=50,yW=g.yW,yC=yW-70+140;/* counterweight moves opposite */
+   pulley(A[0],A[1],r,g.go,C['steel-fill']);pulley(B[0],B[1],r,g.b,C['brass-fill']);
+   const Wp=[A[0]+r,yW],Cp=[B[0]+r-24,780-yW];pulley(Wp[0],Wp[1],26,-g.go,C.part);pulley(Cp[0],Cp[1],22,g.b,C.part);
+   rope([[A[0]-r,A[1]],[A[0]-r,Cp[1]-60]]);rope([[A[0]-r,Cp[1]-60],[Cp[0]-22,Cp[1]]]);/* left strand to counterweight bight */
+   rope([[A[0]+r-26,A[1]+20],[Wp[0]-26,Wp[1]]]);rope([[B[0]-r,B[1]],[Wp[0]+26,Wp[1]]]);rope([[B[0]+r,B[1]],[Cp[0]+22,Cp[1]]]);
+   weight(Wp[0],Wp[1]+26,60,70,'WEIGHT');weight(Cp[0],Cp[1]+22,36,36,'');
+   label(g.wind?'WINDING · pull the cord over B: the weight rises, yet A is still driven':'GOING · the weight descends and drives A',400,500,'center');label('A · going pulley (clock)',A[0]-40,A[1]-64,'center');label('B · winding pulley with click',B[0]+40,B[1]-64,'center');};}

@@ -58,7 +58,7 @@ scottRussell(339,{label:'ONE END SLIDES IN A GUIDE · THE OTHER END RUNS STRAIGH
 scottRussell(337,{label:'SHORT SWINGING ROD REPLACES THE SLIDE',radius:[400,500],rl:190,amp:0.45,concept:true,A:[400,310]});
 
 /* ---- generic crank, slider and yoke drives ---- */
-function crankSlide(num,o){return reg({num,outLabel:'Slide position, mm',concept:!!o.concept,params:o.params||[],O:[200,280],
+function crankSlide(num,o){return reg({num,_kind:o.kind||'',outLabel:'Slide position, mm',concept:!!o.concept,params:o.params||[],O:[200,280],
   update(phi){const r=this.P.r||o.r||70,L=o.L||220,O=this.O,pin=[O[0]+r*Math.cos(phi),O[1]+r*Math.sin(phi)];let x;
     if(o.kind==='yoke'||o.kind==='slotx')x=pin[0]+L*0.5;else x=pin[0]+Math.sqrt(L*L-(pin[1]-O[1])**2);this.g={phi,pin,x,r,L};},
   output(){return this.g.x-this.O[0];},

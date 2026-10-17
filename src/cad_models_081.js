@@ -84,7 +84,7 @@ leverPawlModel083();function leverPawlModel083(){}
   pose(g){return{s:[O[0],O[1],g.t],r:[O[0],O[1],0],b:[0,1,2].map(k=>{const t=-PI/2+k*TAU/3;return[O[0]+g.r[k]*Math.cos(t),O[1]+g.r[k]*Math.sin(t),0];})};},drive:'Turn the lower plate back and forth by its knob; the three bolts close in and open out.'});}
 /* ---------- 95 swash plate ---------- */
 {const al=0.38,R=34,H0=U.BT+30;const disk=K.merge(K.prism(K.circle(R,64),[U.octa(U.SH+0.12)],-2,2));
- PK.defS(95,{summary:'An oblique (swash) disk on an upright shaft: a rod resting on it, held in guides, rises and falls once per turn as the tilted face passes under it.',cam:{yaw:0.6,pitch:0.4},
+ for(const n of [95,272])PK.defS(n,{summary:n===272?'A bevelled disk cam: the disk is set aslant on its shaft, so a rod resting on its face in guides is pushed up and let down once every turn.':'An oblique (swash) disk on an upright shaft: a rod resting on it, held in guides, rises and falls once per turn as the tilted face passes under it.',cam:{yaw:0.6,pitch:0.4},
   base:()=>{const x=R*0.75,tab=z=>K.prism([[x-8,-16],[x+8,-16],[x+8,8],[x-8,8]],[K.circle(2.9,20,x,0)],z,z+4);return[U.plate(-44,-30,44,30),U.post(0,0,H0-16,U.BT+2),K.box(16,5,0,108,x,-18),tab(76),tab(104)];},
   parts:[{id:'d',name:'Swash disk on its hub',role:'driver',mesh:K.merge(disk,K.prism(K.circle(5,24),[K.circle(U.SHB,24)],-14,0))},{id:'r',name:'Push rod with rounded foot',role:'driven',mesh:K.merge(K.cyl(2.4,0,70,20),K.lathe([[0.01,-3],[3,-2],[3.5,0],[0.01,0]],20))},{id:'k',name:'Knob',role:'driver',mesh:K.cyl(4,0,8,24)}],
   pose(phi){const n=[Math.sin(al)*Math.cos(phi),Math.sin(al)*Math.sin(phi),Math.cos(al)],x=R*0.75,h=H0-(x*n[0])/n[2];return{d:U.at([0,0,H0],n,phi,[Math.cos(phi),Math.sin(phi),0]),r:K.M4.T(x,0,h+2),k:K.M4.T(0,0,H0+4)};},

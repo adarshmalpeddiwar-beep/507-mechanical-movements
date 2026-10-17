@@ -262,4 +262,26 @@ PK.Lib=(()=>{const Sh=PK.Sh,PI=Math.PI,TAU=2*PI;
     PK.def(n,{S:opt.S||0.3,summary,parts,ground,fixed,cycle:opt.cycle,
       pose(g){const P=g.P,out={};for(const it of items){if(it.kind==='wheel')out[it.id]=[P[it.c][0],P[it.c][1],g.phi*(o.speed||1)];else if(it.kind==='block')out[it.id]=[P[it.p][0],P[it.p][1],0];else out[it.id]=[P[it.a][0],P[it.a][1],Math.atan2(P[it.b][1]-P[it.a][1],P[it.b][0]-P[it.a][0])];}return out;},
       drive:opt.drive||'Turn the driving crank by its knob and follow the links.'});}
-  return{pxPoly,offsetLoop,pip,groovedPlate,camFlatModel,linkModel};})();
+  /* groove-cam with swinging lever (grooveLever sims): disk with a blind groove, lever above with a peg down into it */
+  function grooveLeverModel(n,summary){const sim=window.MB.SIMS[n];if(!sim||!sim.o||!sim.o.r)return;const o=sim.o,O=[300,290],F=sim.F,Lv=sim.L,S0=0.3;PK._S(S0);
+    const cen=[];for(let i=0;i<240;i++){const t=i/240*TAU,r=o.r(t);cen.push([r*Math.cos(t),r*Math.sin(t)]);}const Rmax=Math.max(...cen.map(p=>Math.hypot(p[0],p[1])))+22;
+    const disk=groovedPlate(K.circle(Rmax,120),cen,(PK.PINR*2+0.8)/S0);const T=PK.TH,G=PK.GAP;
+    const lever=K.merge(PK.ext({o:K.hull([...K.circle(14,24),...K.circle(10,24,Lv,0)]),h:[Sh.hole(0,0)]},0,T),K.cyl(PK.PINR-0.15,-(T+G)+2.5,0,20,Lv*S0,0));
+    PK.def(n,{S:S0,summary,parts:[{id:'d',name:'Grooved disk',role:'driver',layer:0,mesh:disk,bosses:[]},{id:'l',name:'Lever with peg',role:'driven',layer:1,mesh:lever}],
+      ground:[[O[0],O[1],0,0],[F[0],F[1],1,1]],pose(g){return{d:[O[0],O[1],g.phi],l:[F[0],F[1],g.ang]};},drive:'Turn the disk: the peg follows the groove and swings the lever.'});}
+  /* crank and slide (crankSlide sims): crank disk, connecting rod or slotted yoke, guided slide */
+  function crankSlideModel(n,summary){const sim=window.MB.SIMS[n];if(!sim)return;const R=PK.runner(n);if(!R)return;const g0=R.at(0),O=sim.O,r=g0.r,Lr=g0.L,y=O[1],yoke=/yoke|slotx/.test(sim._kind||'')||Math.abs((R.at(1).x-R.at(1).pin[0])-Lr*0.5)<1;R.at(0);
+    const parts=[{id:'c',name:'Crank disk',role:'driver',layer:0,shape:Sh.disk(r+30,[[0,0]],72),pins:[[r,0,1]]}],fixed=[];
+    if(yoke){parts.push({id:'y',name:'Slotted yoke with rod',role:'driven',layer:1,shape:{o:[[-16,-r-30],[16,-r-30],[16,-12],[330,-12],[330,12],[16,12],[16,r+30],[-16,r+30]],h:[Sh.slotPts(0,-r-8,0,r+8,(PK.PINR*2+0.6)/PK.S)]}});
+      fixed.push({shape:S=>S.rect(240,8,O[0]+Lr*0.5+200,y-22),l1:1},{shape:S=>S.rect(240,8,O[0]+Lr*0.5+200,y+22),l1:1});}
+    else{parts.push({id:'rod',name:'Connecting rod',role:'link',layer:1,shape:Sh.bar(Lr,14)},{id:'s',name:'Slide (crosshead)',role:'driven',layer:1,shape:{o:[[-30,-28],[30,-28],[30,-10],[300,-10],[300,10],[30,10],[30,28],[-30,28]],h:[Sh.hole(0,0)]}});
+      fixed.push({shape:S=>S.rect(300,8,O[0]+Lr+150,y-36),l1:1},{shape:S=>S.rect(300,8,O[0]+Lr+150,y+36),l1:1});}
+    PK.def(n,{S:0.3,summary,parts,fixed,ground:[[O[0],O[1],0,0]],pose(g){const o={c:[O[0],O[1],g.phi]};if(yoke)o.y=[g.x-g.L*0.5,y,0];else{o.rod=[g.pin[0],g.pin[1],Math.atan2(y-g.pin[1],g.x-g.pin[0])];o.s=[g.x,y,0];}return o;},
+      drive:'Turn the crank disk by its pin.'});}
+  /* flyball governor (gov sims) */
+  function govModel(n,summary){const sim=window.MB.SIMS[n];if(!sim)return;const U=PK.U,Lg=(sim.L||120)*0.25,top=U.BT+70;
+    PK.defS(n,{summary,cam:{yaw:0.5,pitch:0.25},params:sim.params,base:()=>[U.plate(-30,-30,30,30),U.post(0,0,U.BT+20,U.BT+5)],
+      parts:[{id:'sp',name:'Spindle',role:'driver',mesh:K.merge(K.cyl(2.5,0,top-U.BT+8,20),K.box(16,6,top-U.BT-4,top-U.BT+2))},{id:'arm',name:'Ball arm',role:'link',qty:2,mesh:K.merge(K.box(4,4,0,Lg),K.lathe([[0.01,Lg-5],[6,Lg-3],[6,Lg+3],[0.01,Lg+5]],24))},{id:'sl',name:'Sliding sleeve',role:'driven',mesh:K.tubeSolid(6,2.8,0,8,32)}],
+      pose(phi,g){const th=g.th||0.5,out={sp:K.M4.mul(K.M4.T(0,0,U.BT+5),K.M4.Rz(phi)),arm:[],sl:K.M4.mul(K.M4.T(0,0,top-Lg*Math.cos(th)-14),K.M4.Rz(phi))};for(const s of [0,PI]){const a=phi+s,d=[Math.sin(th)*Math.cos(a),Math.sin(th)*Math.sin(a),-Math.cos(th)];out.arm.push(U.at([6*Math.cos(a),6*Math.sin(a),top],d,0));}return out;},
+      drive:'Spin the spindle (set the speed on the simulation): the balls fly out and lift the sleeve.'});}
+  return{pxPoly,offsetLoop,pip,groovedPlate,camFlatModel,linkModel,grooveLeverModel,crankSlideModel,govModel};})();
