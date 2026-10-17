@@ -17,12 +17,23 @@ function arcArrow(cx,cy,r,a0,a1,col){ctx.save();ctx.strokeStyle=col;ctx.fillStyl
 function linArrow(x,y,len,col){if(Math.abs(len)<3)return;ctx.save();ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+len,y);ctx.stroke();const s=Math.sign(len);ctx.beginPath();ctx.moveTo(x+len+8*s,y);ctx.lineTo(x+len,y-4);ctx.lineTo(x+len,y+4);ctx.closePath();ctx.fill();ctx.restore();}
 
 const PROF=[[-0.5,0],[-0.27,0],[-0.12,1],[0.12,1],[0.27,0]];
+/* involute tooth flank table, cached per tooth count: [[r/R, half-angle·N/τ]...] tip to root */
+const _flank={};
+function flankOf(N,internal){const k=N+(internal?'i':'');if(_flank[k])return _flank[k];const R=1,m=2/N,pa=20*PI/180,rb=Math.cos(pa),inv=a=>Math.tan(a)-a,ip=inv(pa);
+  const ra=internal?R+1.25*m:R+m,rr=internal?R-m:R-1.25*m,half=PI/(2*N)*(internal?1.04:0.96);const r0=Math.max(rb,rr),o=[];
+  for(let i=0;i<=5;i++){const r=r0+(ra-r0)*i/5;o.push([r,half+ip-inv(Math.acos(Math.min(1,rb/r)))]);}
+  if(rr<r0-1e-6)o.unshift([rr,o[0][1]]);return _flank[k]={o,rr,ra};}
 function gearPts(cx,cy,r,N,ang,internal,a0,a1){
-  const m=2*r/N,tau=TAU/N,rt=internal?r-m:r+m,rr=internal?r+1.25*m:r-1.25*m,pts=[];
+  const tau=TAU/N,F=flankOf(N,internal),pts=[];
   let i0=0,i1=N-1;
   if(a0!=null){i0=Math.ceil((a0-ang)/tau);i1=Math.floor((a1-ang)/tau);}
-  for(let i=i0;i<=i1;i++){const c=ang+i*tau;for(const [f,t] of PROF){const a=c+f*tau,rad=t?rt:rr;pts.push([cx+rad*Math.cos(a),cy+rad*Math.sin(a)]);}}
-  if(a0!=null){const a=ang+(i1+0.5)*tau;pts.push([cx+rr*Math.cos(a),cy+rr*Math.sin(a)]);}
+  const P=(rad,a)=>pts.push([cx+rad*r*Math.cos(a),cy+rad*r*Math.sin(a)]);
+  if(!internal){for(let i=i0;i<=i1;i++){const c=ang+i*tau;for(let j=0;j<F.o.length;j++)P(F.o[j][0],c-F.o[j][1]);for(let j=F.o.length-1;j>=0;j--)P(F.o[j][0],c+F.o[j][1]);}}
+  else{/* internal: material tooth points inward; the space between teeth is an involute "tooth" outward */
+    for(let i=i0;i<=i1;i++){const c=ang+i*tau,s=c+tau/2;/* tooth centre c (inner tip at r-m) */
+      P(F.rr,c);/* inner tip centre */
+      for(let j=0;j<F.o.length;j++)P(F.o[j][0],s-F.o[j][1]);for(let j=F.o.length-1;j>=0;j--)P(F.o[j][0],s+F.o[j][1]);}}
+  if(a0!=null){const a=ang+(i1+0.5)*tau;pts.push([cx+F.rr*r*Math.cos(a),cy+F.rr*r*Math.sin(a)]);}
   return pts;
 }
 function drawGear(cx,cy,r,N,ang,fill,o={}){
@@ -927,7 +938,7 @@ reg({num:344,outLabel:'Cylinder angle, degrees',O:[560,260],T:[250,260],r:65,
   output(){return this.g.a*180/PI;},
   draw(){const g=this.g,O=this.O,T=this.T;circ(O[0],O[1],120);paint(C.part,C.ink);for(let k=0;k<5;k++){const a=g.phi+k*TAU/5;bar(O[0],O[1],O[0]+110*Math.cos(a),O[1]+110*Math.sin(a),8,C.part2);}
     bar(O[0],O[1],g.pin[0],g.pin[1],16,C['brass-fill']);
-    ctx.save();ctx.translate(T[0],T[1]);ctx.rotate(g.a);ctx.beginPath();ctx.rect(-170,-44,200,88);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(g.d-260-20,-34,30,68);paint(C['steel-fill'],C.ink);bar(g.d-250,0,g.d,0,10,C.part);ctx.restore();
+    ctx.save();ctx.translate(T[0],T[1]);ctx.rotate(g.a);ctx.beginPath();ctx.rect(-90,-44,250,88);ctx.rect(-80,-34,230,68);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(g.d-250-15,-34,30,68);paint(C['steel-fill'],C.ink);bar(g.d-235,0,g.d,0,10,C.part);ctx.restore();
     pivot(g.pin[0],g.pin[1],5);pivot(O[0],O[1],6);circ(T[0],T[1],14);paint(C.hi,C.ink);pivot(T[0],T[1],5);ground(T[0],T[1]+60,60);ctx.beginPath();ctx.rect(T[0]-8,T[1]+14,16,46);paint(C.part2,C.ink);
     label('CYLINDER ROCKS ON TRUNNIONS',T[0],T[1]-90,'center');},
   reads(){const g=this.g;return[['Cylinder angle',`${(g.a*180/PI).toFixed(1)}°`],['Piston stroke',`${2*this.r} mm`],['Valve','set by the rocking itself']];}});
@@ -1187,7 +1198,7 @@ function doublePawl(num){return reg({num,outLabel:'Wheel angle, degrees',N:24,
       bar(Cc[0]+150*Math.cos(arm),Cc[1]+150*Math.sin(arm),pv[0],pv[1],8,C['brass-fill']);bar(pv[0],pv[1],Cc[0]+rr*Math.cos(ta),Cc[1]+rr*Math.sin(ta),8,eng?C.part2:C.part);pivot(pv[0],pv[1],4);}
     pivot(Cc[0],Cc[1],6);label('TWO PAWLS · one works on each stroke',Cc[0],Cc[1]+160,'center');},
   reads(){return[['Wheel turned',`${(this.W*180/PI).toFixed(0)}°`],['Strokes used','both'],['Motion','nearly continuous']];}});}
-doublePawl(77);doublePawl(206);doublePawl(236);
+
 
 /* 81 part gear with spring-return rack */
 reg({num:81,outLabel:'Rack position, mm',
@@ -1195,7 +1206,7 @@ reg({num:81,outLabel:'Rack position, mm',
   output(){return this.g.y;},
   draw(){const g=this.g,G=[330,200],r=60,m=6,p=PI*m,x=G[0]+r;
     const tau=TAU/20,pts=gearPts(G[0],G[1],r,20,g.phi-TAU/3+tau/2,false,g.phi-TAU/3+0.01,g.phi-0.01);poly(pts);ctx.arc(G[0],G[1],r-1.25*m-1,g.phi,g.phi-TAU/3+TAU);ctx.closePath();circ(G[0],G[1],8,false);paint(C['brass-fill'],C.ink);pivot(G[0],G[1],6);
-    const ty=y=>y;const pts2=[];const kmin=Math.ceil((40-G[1]-g.y)/p),kmax=Math.floor((360-G[1]-g.y)/p);for(let k=kmin;k<=kmax;k++){const c=G[1]+g.y+k*p;for(const [f,t] of PROF)pts2.push([t?x-m:x+1.25*m,c+f*p]);}
+    const ty=y=>y;const pts2=[];const kmin=Math.ceil((44-G[1])/p),kmax=Math.floor((372-G[1])/p);for(let k=kmin;k<=kmax;k++){const c=G[1]+g.y+k*p;for(const [f,t] of PROF)pts2.push([t?x-m:x+1.25*m,c+f*p]);}
     poly([[x+1.25*m+22,40+g.y],[x+1.25*m,40+g.y],...pts2,[x+1.25*m,380+g.y],[x+1.25*m+22,380+g.y]]);ctx.closePath();paint(C['steel-fill'],C.ink);
     springZ(x+20,380+g.y,x+20,480,10,8);ground(x+20,480,40);
     label('TEETH ON A THIRD OF THE GEAR',G[0],G[1]+110,'center');label('SPRING PULLS THE RACK BACK',x+60,440);},
@@ -1483,7 +1494,7 @@ reg({num:345,outLabel:'Cylinder angle, degrees',T:[400,90],O:[400,390],r:60,
   update(phi){const pin=[this.O[0]+this.r*Math.cos(phi),this.O[1]+this.r*Math.sin(phi)];const a=Math.atan2(pin[0]-this.T[0],pin[1]-this.T[1]);this.g={phi,pin,a,d:Math.hypot(pin[0]-this.T[0],pin[1]-this.T[1])};},
   output(){return this.g.a*180/PI;},
   draw(){const g=this.g,T=this.T,O=this.O;flywheel(O[0],O[1],110,g.phi);bar(O[0],O[1],g.pin[0],g.pin[1],14,C['brass-fill']);
-    ctx.save();ctx.translate(T[0],T[1]);ctx.rotate(-g.a);ctx.beginPath();ctx.rect(-40,-10,80,180);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(-32,g.d-150,64,24);paint(C['steel-fill'],C.ink);bar(0,g.d-140,0,g.d,10,C.part);ctx.restore();
+    ctx.save();ctx.translate(T[0],T[1]);ctx.rotate(-g.a);ctx.beginPath();ctx.rect(-44,-12,88,244);ctx.rect(-34,10,68,222);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(-32,g.d-160,64,24);paint(C['steel-fill'],C.ink);bar(0,g.d-148,0,g.d,10,C.part);ctx.restore();
     pivot(g.pin[0],g.pin[1],5);pivot(O[0],O[1],6);circ(T[0],T[1],12);paint(C.hi,C.ink);pivot(T[0],T[1],4);ground(T[0],T[1]-14,60,true);label('CYLINDER SWINGS FROM THE TOP',T[0]+60,T[1]+20);},
   reads(){const g=this.g;return[['Cylinder swing',`${(g.a*180/PI).toFixed(1)}°`],['Stroke',`${2*this.r} mm`]];}});
 
@@ -1548,7 +1559,7 @@ function paddle(num,feather){return reg({num,outLabel:'Wheel turns',
   draw(){const g=this.g,Cc=[450,250],R=150;ctx.beginPath();ctx.moveTo(0,190);ctx.lineTo(340,190);ctx.quadraticCurveTo(300,340,200,360);ctx.lineTo(0,360);ctx.closePath();paint(C.part,C.ink);
     circ(Cc[0],Cc[1],R-30);paint(null,C.ink,1.2);for(let k=0;k<8;k++){const a=g.a+k*PI/4;const t=[Cc[0]+R*Math.cos(a),Cc[1]+R*Math.sin(a)];bar(Cc[0],Cc[1],t[0],t[1],7,C.part2);
       ctx.save();ctx.translate(t[0],t[1]);ctx.rotate(feather?0:a);ctx.beginPath();ctx.rect(feather?-6:-30,feather?-30:-6,feather?12:60,feather?60:12);paint(C['brass-fill'],C.ink);ctx.restore();}
-    if(feather){const E=[Cc[0]+40,Cc[1]];circ(E[0],E[1],12);paint(C['steel-fill'],C.ink);for(let k=0;k<8;k++){const a=g.a+k*PI/4;bar(E[0],E[1],Cc[0]+R*Math.cos(a)+30,Cc[1]+R*Math.sin(a),3,C['steel-fill']);}}
+    if(feather){const E=[Cc[0]+40,Cc[1]];circ(E[0],E[1],12);paint(C['steel-fill'],C.ink);for(let k=0;k<8;k++){const a=g.a+k*PI/4,t=[Cc[0]+R*Math.cos(a),Cc[1]+R*Math.sin(a)];bar(t[0],t[1],t[0]+40,t[1],5,C.part);bar(E[0],E[1],t[0]+40,t[1],3,C['steel-fill']);}}
     pivot(Cc[0],Cc[1],7);ctx.save();ctx.globalAlpha=.85;water(0,330,800,190);ctx.restore();flowLines(330,520,g.phi,1);
     label(feather?'PADDLES KEPT UPRIGHT BY AN ECCENTRIC':'PADDLES PUSH WATER AFT',Cc[0],60,'center');},
   reads(v){return[['Wheel speed',rpmOf(Math.abs(v))],['Paddles',feather?'enter and leave edge-on':'fixed to the arms']];}});}
@@ -1638,7 +1649,7 @@ reg({num:474,outLabel:'Sphere turns',
 reg({num:486,outLabel:'Rotor turns',
   update(phi){this.g={phi:phi*0.5};},output(){return this.g.phi/TAU;},
   draw(){const g=this.g,O=[420,260],L=170;ctx.save();ctx.strokeStyle=C.muted;ctx.lineWidth=1.4;for(let i=0;i<6;i++){const y=90+i*36,x=60+mod(g.phi*60+i*20,80);linArrow(x,y,40,C.muted);}ctx.restore();
-    for(let k=0;k<4;k++){const a=-g.phi+k*PI/2,E=[O[0]+L*Math.cos(a),O[1]+L*Math.sin(a)];bar(O[0],O[1],E[0],E[1],8,C.part2);const vx=Math.sin(a);const catching=vx>0;const sa=catching?a:a+PI/2;
+    for(let k=0;k<4;k++){const a=-g.phi+k*PI/2,E=[O[0]+L*Math.cos(a),O[1]+L*Math.sin(a)];bar(O[0],O[1],E[0],E[1],8,C.part2);const vx=Math.sin(a);const catching=vx>0;const sa=catching?0:PI/2;
       ctx.save();ctx.translate(E[0],E[1]);ctx.rotate(sa);ctx.beginPath();ctx.rect(-6,-40,12,80);paint(catching?C['brass-fill']:C.part,C.ink);ctx.restore();pivot(E[0],E[1],4);}
     pivot(O[0],O[1],8);label('WIND',60,60);label('SAILS FACE THE WIND ONE WAY, TURN EDGE-ON COMING BACK',400,500,'center');},
   reads(v){return[['Rotor',rpmOf(Math.abs(v))],['Axis','vertical'],['View','from above']];}});
@@ -1849,25 +1860,39 @@ function noncirc(num,r1fn,o={}){return reg({num,outLabel:'Driven gear, turns',co
   update(phi){this.build();const n=720,c=Math.floor(phi/TAU),f=phi/TAU-c,x=f*n,i=Math.floor(x);const t=this.T[i]+(this.T[Math.min(n,i+1)]-this.T[i])*(x-i);const r1=r1fn(mod(phi,TAU));this.g={phi,a2:-(t+c*TAU),ratio:r1/(this.d-r1)};},
   output(){return -this.g.a2/TAU;},
   draw(){const g=this.g,F1=[400-this.d/2,265],F2=[400+this.d/2,265];
-    const p1=[];for(let i=0;i<240;i++){const s=i/240*TAU;const r=r1fn(s);p1.push([F1[0]+r*Math.cos(-s+g.phi),F1[1]+r*Math.sin(-s+g.phi)]);}poly(p1);ctx.closePath();paint(C['brass-fill'],C.ink);
-    const p2=this.shape2.filter((_,i)=>i%3===0).map(([m,r])=>[F2[0]+r*Math.cos(PI+m+g.a2),F2[1]+r*Math.sin(PI+m+g.a2)]);poly(p2);ctx.closePath();paint(C['steel-fill'],C.ink);
-    for(const [P,a] of [[F1,g.phi],[F2,g.a2]]){bar(P[0],P[1],P[0]+30*Math.cos(a),P[1]+30*Math.sin(a),5,C.part2);pivot(P[0],P[1],5);}
+    this.ensurePC();
+    ncGear(F1[0],F1[1],this.pcA,0,g.phi,C['brass-fill']);ncGear(F2[0],F2[1],this.pcB,this.phB,PI+g.a2,C['steel-fill']);
     label(o.label||'NON-CIRCULAR GEARS',400,470,'center');},
+  ensurePC(){this.build();
+    if(!this.pcA){const rA=s=>r1fn(mod(-s,TAU)),T=this.T,S2=this.shape2,n=T.length-1,rB=s=>{s=mod(s,TAU);let lo=0,hi=n;while(hi-lo>1){const m=(lo+hi)>>1;if(T[m]<=s)lo=m;else hi=m;}const f=(s-T[lo])/((T[lo+1]-T[lo])||1);return S2[lo][1]+(S2[lo+1][1]-S2[lo][1])*f;};
+      const pa=pitchCurve(rA,null,1),Z=o.Z||Math.max(12,Math.round(pa.L/16));this.pcA=pitchCurve(rA,null,Z);this.pcB=pitchCurve(rB,null,Z);this.phB=ncPhase(this.pcA,this.pcB,0,0);}},
   reads(v){return[['Speed ratio now',`${this.g.ratio.toFixed(2)} × driver`],['Driven',rpmOf(Math.abs(v))]];}});}
 noncirc(30,s=>{const c=Math.abs(Math.cos(s)),q=Math.abs(Math.sin(s));return 70/Math.pow(Math.pow(c,4)+Math.pow(q,4),0.25);},{label:'ROUNDED-SQUARE GEARS · speed varies 4 times a turn'});
 noncirc(38,s=>{const a=mod(s,TAU);return a<PI?70:70+28*Math.sin(a-PI);},{label:'ROUND FOR HALF A TURN, BULGED FOR THE REST',concept:true});
 noncirc(209,s=>75+18*Math.cos(2*s),{label:'LOBED ROLLING WHEELS',concept:true});
 
-function pinionFollower(num,r1fn,o={}){return reg({num,outLabel:'Pinion turns',concept:!!o.concept,
-  reset(){this.pa=0;this.last=null;},
-  update(phi){const r=r1fn(-phi);if(this.last===null)this.last=phi;this.pa+=-(phi-this.last)*r/30;this.last=phi;this.g={phi,r};},
-  output(){return this.pa/TAU;},
-  draw(){const g=this.g,F=[320,265],P=[F[0]+g.r+30,265];const pts=[];for(let i=0;i<240;i++){const s=i/240*TAU,r=r1fn(s);pts.push([F[0]+r*Math.cos(s+g.phi),F[1]+r*Math.sin(s+g.phi)]);}poly(pts);ctx.closePath();paint(C['brass-fill'],C.ink);
-    ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=1;for(let i=0;i<60;i++){const s=i/60*TAU,r=r1fn(s);ctx.beginPath();ctx.moveTo(F[0]+r*Math.cos(s+g.phi),F[1]+r*Math.sin(s+g.phi));ctx.lineTo(F[0]+(r-7)*Math.cos(s+g.phi),F[1]+(r-7)*Math.sin(s+g.phi));ctx.stroke();}ctx.restore();pivot(F[0],F[1],6);
-    if(o.slot){ctx.beginPath();ctx.rect(F[0]+40,P[1]-14,300,28);ctx.rect(F[0]+50,P[1]-6,280,12);paint(C.part2,C.ink);}else{const Q=[720,120];bar(Q[0],Q[1],P[0],P[1],12,C.part2);pivot(Q[0],Q[1],6);ground(Q[0],Q[1]-12,40,true);}
-    drawGear(P[0],P[1],30,12,this.pa,C['steel-fill'],{bore:5});pivot(P[0],P[1],4);label(o.label,400,470,'center');},
-  reads(){return[['Driving radius now',`${this.g.r.toFixed(0)} mm`],['Pinion speed',`${(this.g.r/30).toFixed(2)} × gear`]];}});}
-pinionFollower(35,s=>{const e=0.4,a=95;return a*(1-e*e)/(1+e*Math.cos(s));},{slot:true,label:'PINION SLIDES IN A SLOTTED BAR TO STAY IN MESH'});
+function pinionFollower(num,r1fn,o={}){return reg({num,outLabel:'Pinion turns',concept:!!o.concept,F:[320,265],Q:[720,120],
+  pc(){if(!this._pc){const p0=pitchCurve(r1fn,null,1),Zg=Math.round(p0.L/(TAU*30/12));this._pc=pitchCurve(r1fn,null,Zg);this.Rp=12*this._pc.p/TAU;}return this._pc;},
+  reset(){this.aU=null;this.prevP=null;},
+  /* pinion centre = pitch point + Rp along the curve normal; slot: centre stays on the slot line; arm: centre stays at the arm length from its pivot */
+  update(phi){const pc=this.pc(),Rp=this.Rp,F=this.F,cs=Math.cos(phi),sn=Math.sin(phi);
+    const at=a=>{const q=pc.at(a),tl=Math.hypot(q[2],q[3])||1,nx=q[3]/tl,ny=-q[2]/tl,lx=q[0]+Rp*nx,ly=q[1]+Rp*ny;return{w:[F[0]+lx*cs-ly*sn,F[1]+lx*sn+ly*cs],n:[nx*cs-ny*sn,nx*sn+ny*cs],r:Math.hypot(q[0],q[1])};};
+    if(this.Larm===undefined){const z=at(pc.arcAt(0));this.Q=[z.w[0]+30,F[1]-215];this.Larm=Math.hypot(z.w[0]-this.Q[0],z.w[1]-this.Q[1]);}
+    const Q=this.Q,f=a=>{const z=at(a);return o.slot?z.w[1]-F[1]:Math.hypot(z.w[0]-Q[0],z.w[1]-Q[1])-this.Larm;};
+    const guess=this.aU===null?pc.arcAt(-phi):mod(this.aU,pc.L),N=480,L=pc.L;let best=null,bd=1e9;
+    for(let i=0;i<N;i++){const a0=i/N*L,a1=(i+1)/N*L,f0=f(a0),f1=f(a1);if(f0*f1>0)continue;let lo=a0,hi=a1,flo=f0;for(let k=0;k<28;k++){const m=(lo+hi)/2,fm=f(m);if(fm*flo>0){lo=m;flo=fm;}else hi=m;}const r=(lo+hi)/2;
+      const zw=at(r).w;if(zw[0]<F[0])continue;const pp=this.prevP||[F[0]+200,F[1]];const d=Math.hypot(zw[0]-pp[0],zw[1]-pp[1]);if(d<bd){bd=d;best=r;}}
+    if(best===null)best=guess;if(this.aU===null)this.aU=best;else this.aU+=mod(best-mod(this.aU,L)+L/2,L)-L/2;
+    const z=at(best);this.prevP=z.w;this.g={phi,r:z.r,P:z.w,pa:Math.atan2(-z.n[1],-z.n[0])-(PI/12-this.aU/Rp)};},
+  output(){return this.g.pa/TAU;},
+  draw(){const g=this.g,pc=this.pc(),F=this.F,Rp=this.Rp,P=g.P;
+    if(o.slot){ctx.beginPath();ctx.rect(F[0]+60,F[1]-14,330,28);ctx.rect(F[0]+70,F[1]-6,310,12);paint(C.part2,C.ink);}
+    ncGear(F[0],F[1],pc,0,g.phi,C['brass-fill']);
+    if(o.slot){springZ(P[0]+12,P[1],F[0]+380,P[1],9,7);ctx.beginPath();ctx.rect(P[0]-9,P[1]-6,18,12);paint(C.part,C.ink);}
+    else{const Q=this.Q;bar(Q[0],Q[1],P[0],P[1],12,C.part2);pivot(Q[0],Q[1],6);ground(Q[0],Q[1]-12,40,true);}
+    drawGear(P[0],P[1],Rp,12,g.pa,C['steel-fill'],{bore:5});pivot(P[0],P[1],4);label(o.label,400,470,'center');},
+  reads(){return[['Driving radius now',`${this.g.r.toFixed(0)} mm`],['Pinion speed',`${(this.g.r/this.Rp).toFixed(2)} × gear`]];}});}
+pinionFollower(35,s=>{const e=0.4,a=95;return a*(1-e*e)/(1+e*Math.cos(s));},{slot:true,label:'PINION SHAFT SLIDES IN A SLOTTED BAR · A SPRING KEEPS IT IN MESH'});
 pinionFollower(221,s=>{const e=0.4,a=95;return a*(1-e*e)/(1+e*Math.cos(s));},{label:'PINION ON A SWINGING ARM FOLLOWS THE ELLIPSE'});
 pinionFollower(201,s=>90+22*Math.cos(s)+12*Math.cos(3*s),{label:'IRREGULAR GEAR · arm swings unevenly'});
 pinionFollower(222,s=>{const R=90,e=28;return Math.sqrt(R*R-e*e*Math.sin(s)**2)+e*Math.cos(s);},{label:'ROUND GEAR ON AN OFF-CENTRE AXIS',concept:false});
@@ -1915,19 +1940,39 @@ reg({num:507,outLabel:'Output wheel, turns',
   reads(){const g=this.g;return[['Arm turns',`${(g.arm/TAU).toFixed(1)}`],['Output turns',`${(g.slow/TAU).toFixed(3)}`],['Brown\'s train','about 25,000 arm turns per output turn']];}});
 
 /* ---- mangle wheels ---- */
-function mangle(num,o){return reg({num,outLabel:'Wheel angle, degrees',concept:!!o.concept,
-  update(phi){const Ro=o.Ro,Ri=o.Ri,rp=22,span=o.span,q=(Ro-Ri)/2+rp,Lt=PI*q,La=Ro*span,Lc=Ri*span,P=La+Lt+Lc+Lt,s=mod(rp*phi,P);let w,pc;
-    if(s<La){w=span/2-s/Ro;pc=[0,-(Ro+rp)];}else if(s<La+Lt){w=-span/2;const t=-PI/2+(s-La)/q;pc=[q*Math.cos(t),-(Ro+Ri)/2+q*Math.sin(t)];}
-    else if(s<La+Lt+Lc){w=-span/2+(s-La-Lt)/Ri;pc=[0,-(Ri-rp)];}else{w=span/2;const t=PI/2+(s-La-Lt-Lc)/q;pc=[q*Math.cos(t),-(Ro+Ri)/2+q*Math.sin(t)];}
-    this.g={phi,w,pc,rp};},
+/* mangle wheel: pins on a closed track (outer row Ro, inner row Ri, round ends of radius e) at exactly the pinion's pitch;
+   the pinion's axle runs in a groove that follows the track, so it passes outside the outer row one way and inside the inner row the other */
+function mangleGeo(o){let Ro=o.Ro,Ri=o.Ri;const rp=22,Z=9,p=TAU*rp/Z;let e=(Ro-Ri)/2;if(e<6){Ro=Ri=(Ro+Ri)/2;e=0;}const Rm=(Ro+Ri)/2,q=e+rp,gw=12;
+  let span=Math.min(o.span,TAU-2*(q+gw)/Rm-0.25);const Nt=Math.round(((Ro+Ri)*span+TAU*e)/p);span=(Nt*p-TAU*e)/(Ro+Ri);
+  const t0=-PI/2-span/2,t1=-PI/2+span/2,u0=[Math.cos(t0),Math.sin(t0)],u1=[Math.cos(t1),Math.sin(t1)],v0=[-u0[1],u0[0]],v1=[-u1[1],u1[0]],C0=[Rm*u0[0],Rm*u0[1]],C1=[Rm*u1[0],Rm*u1[1]];
+  const La=Ro*span,Lc=Ri*span,Le=PI*e;
+  const pinAt=sg=>{if(sg<La){const t=t0+sg/Ro;return[Ro*Math.cos(t),Ro*Math.sin(t)];}if(sg<La+Le){const u=(sg-La)/e;return[C1[0]+e*(u1[0]*Math.cos(u)+v1[0]*Math.sin(u)),C1[1]+e*(u1[1]*Math.cos(u)+v1[1]*Math.sin(u))];}
+    if(sg<La+Le+Lc){const t=t1-(sg-La-Le)/Ri;return[Ri*Math.cos(t),Ri*Math.sin(t)];}const u=(sg-La-Le-Lc)/e;return[C0[0]-e*(u0[0]*Math.cos(u)+v0[0]*Math.sin(u)),C0[1]-e*(u0[1]*Math.cos(u)+v0[1]*Math.sin(u))];};
+  const pins=[];for(let k=0;k<Nt;k++){const P=pinAt(k*p);if(!pins.some(Q=>Math.hypot(Q[0]-P[0],Q[1]-P[1])<2))pins.push(P);}
+  /* closed loop of the pinion centre, offset outward by dr */
+  const loop=(dr,n=48)=>{const pts=[],ro=Ro+rp+dr,ri=Ri-rp-dr,rq=q+dr;
+    for(let i=0;i<=n*2;i++){const t=t0+(t1-t0)*i/(n*2);pts.push([ro*Math.cos(t),ro*Math.sin(t)]);}
+    for(let i=1;i<n;i++){const u=PI*i/n;pts.push([C1[0]+rq*(u1[0]*Math.cos(u)+v1[0]*Math.sin(u)),C1[1]+rq*(u1[1]*Math.cos(u)+v1[1]*Math.sin(u))]);}
+    for(let i=0;i<=n*2;i++){const t=t1+(t0-t1)*i/(n*2);pts.push([ri*Math.cos(t),ri*Math.sin(t)]);}
+    for(let i=1;i<n;i++){const u=PI*i/n;pts.push([C0[0]-rq*(u0[0]*Math.cos(u)+v0[0]*Math.sin(u)),C0[1]-rq*(u0[1]*Math.cos(u)+v0[1]*Math.sin(u))]);}
+    return pts;};
+  return{Ro,Ri,e,Rm,q,rp,Z,p,span,Nt,pins,loop,gw,Rw:Ro+rp+gw+12,La,Lc,Lt:PI*q,P:La+Lc+TAU*q};}
+function mangle(num,o){const G=mangleGeo(o);return reg({num,outLabel:'Wheel angle, degrees',concept:!!o.concept,geo:G,
+  update(phi){const {Ro,Ri,rp,span,q,La,Lt,Lc,P,Rm}=G,s=mod(rp*phi,P);let w,pc;
+    if(s<La){w=span/2-s/Ro;pc=[0,-(Ro+rp)];}else if(s<La+Lt){w=-span/2;const t=-PI/2+(s-La)/q;pc=[q*Math.cos(t),-Rm+q*Math.sin(t)];}
+    else if(s<La+Lt+Lc){w=-span/2+(s-La-Lt)/Ri;pc=[0,-(Ri-rp)];}else{w=span/2;const t=PI/2+(s-La-Lt-Lc)/q;pc=[q*Math.cos(t),-Rm+q*Math.sin(t)];}
+    this.g={phi,w,pc,rp,a:phi+PI/2-PI/G.Z};},
   output(){return this.g.w*180/PI;},
-  draw(){const g=this.g,O=[400,300],Ro=o.Ro,Ri=o.Ri,span=o.span;circ(O[0],O[1],Ro+30);paint(C['steel-fill'],C.ink);circ(O[0],O[1],Ri-26);paint(C.sheet,C.ink);
-    const n=Math.round(Ro*span/16);for(let i=0;i<=n;i++){const t=-PI/2+g.w-span/2+i*span/n;circ(O[0]+Ro*Math.cos(t),O[1]+Ro*Math.sin(t),5);paint(C.part,C.ink,1);}
-    const ni=Math.round(Ri*span/16);for(let i=0;i<=ni;i++){const t=-PI/2+g.w-span/2+i*span/ni;circ(O[0]+Ri*Math.cos(t),O[1]+Ri*Math.sin(t),5);paint(C.part,C.ink,1);}
-    pivot(O[0],O[1],6);const P=[O[0]+g.pc[0],O[1]+g.pc[1]];bar(P[0],40,P[0],P[1],10,C.part2);drawGear(P[0],P[1],g.rp,9,g.phi,C['brass-fill'],{bore:4});pivot(P[0],P[1],3);
-    label(o.label,400,505,'center');},
-  reads(){return[['Wheel',`${(this.g.w*180/PI).toFixed(0)}°`],['Pinion','turns one way only'],['Speeds',Math.abs(o.Ro-o.Ri)<1?'equal both ways':'slower one way']];}});}
-mangle(36,{Ro:150,Ri:110,span:PI*1.6,label:'PINION RUNS ROUND THE END OF THE PIN ROW AND REVERSES THE WHEEL'});
+  draw(){const g=this.g,O=[400,300],c=Math.cos(g.w),s=Math.sin(g.w),T=([x,y])=>[O[0]+x*c-y*s,O[1]+x*s+y*c];
+    circ(O[0],O[1],G.Rw);paint(C['steel-fill'],C.ink);
+    ctx.beginPath();const lo=G.loop(G.gw/2).map(T),li=G.loop(-G.gw/2).map(T);lo.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();li.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();paint(C.sheet,C.ink,0.8);
+    for(const p of G.pins){const q=T(p);circ(q[0],q[1],3.6);paint(C.part,C.ink,1);}
+    pivot(O[0],O[1],6);const P=[O[0]+g.pc[0],O[1]+g.pc[1]];
+    ctx.save();ctx.setLineDash([5,4]);ctx.strokeStyle=C.muted;ctx.lineWidth=1;circ(O[0],O[1]-G.Rm,G.q+6,false);ctx.stroke();ctx.restore();
+    drawGear(P[0],P[1],g.rp,G.Z,g.a,C['brass-fill'],{bore:4});pivot(P[0],P[1],3);
+    label(o.label,400,505,'center');label('pinion axle runs in the groove · dashed: window in the bridge',400,30,'center');},
+  reads(){return[['Wheel',`${(this.g.w*180/PI).toFixed(0)}°`],['Pinion','turns one way only'],['Speeds',Math.abs(o.Ro-o.Ri)<6?'equal both ways':'slower one way']];}});}
+mangle(36,{Ro:130,Ri:130,span:PI*1.7,label:'ONE ROW OF TEETH · the pinion works outside it one way and inside it the other'});
 mangle(192,{Ro:160,Ri:100,span:PI*1.5,label:'SPEED CHANGES THROUGH EACH SWING',concept:true});
 mangle(193,{Ro:165,Ri:105,span:PI*1.8,label:'NEARLY A FULL TURN EACH WAY, SLOWER ONE WAY'});
 mangle(194,{Ro:132,Ri:128,span:PI*1.6,label:'EQUAL SPEED BOTH WAYS'});
@@ -2074,11 +2119,6 @@ function stepper(num,o){return reg({num,outLabel:'Driven wheel, turns',concept:!
     if(o.pawl){const Q=[Wc[0]+30,Wc[1]-(o.rw||110)-60],off=mod(g.s,1),lift=off>0&&off<1?Math.sin(off*PI)*14:0;bar(Q[0],Q[1],Wc[0]+12,Wc[1]-(o.rw||110)*0.7-lift,8,C.part);pivot(Q[0],Q[1],5);springZ(Q[0]+60,Q[1]-20,Q[0]+30,Q[1]+18,8,5);}
     label(o.label,400,480,'center');if(o.l2)label(o.l2,400,500,'center');},
   reads(){const g=this.g;return[['Steps taken',`${Math.floor(g.s+1e-6)}`],['Each step',`1/${o.N} turn`],['Driver turns per step','1'],['Between steps',o.rim?'locked by the rim':'held at rest']];}});}
-stepper(54,{N:6,style:'star',label:'PIN ON THE DISK KICKS THE STAR ROUND ONE POINT',concept:true});
-stepper(63,{N:10,style:'star',pawl:true,label:'DROP PAWL AND SPRING HOLD THE STAR BETWEEN STEPS',Wc:[510,300]});
-stepper(65,{N:8,style:'studs',label:'ONE TAPPET, ONE STUD PER TURN'});
-stepper(70,{N:8,style:'studs',rim:true,label:'RIM HOLDS THE STUDS · THE OPENING LETS ONE THROUGH'});
-stepper(71,{N:8,style:'studs',rim:true,tooth:true,label:'TAPPET STRIKES A STUD, RIM LOCKS THE REST'});
 stepper(364,{N:12,style:'slots',rd:60,D:[330,260],Wc:[500,260],rw:120,label:'ROLLERS ON THE SMALL WHEEL STEP THE LARGE ONE',concept:true});
 stepper(398,{N:4,style:'slots',u0:0.2,u1:0.8,label:'CAM STARTS AND STOPS THE DRIVEN WHEEL',concept:true});
 oneTooth(69,true);SIMS_NEW[69].concept=true;
@@ -2119,12 +2159,14 @@ function wormRelease(num,o){return reg({num,outLabel:'Main wheel, turns',concept
     if(o.kind==='weight'){bar(S[0]+80,S[1]+140,S[0]+80,S[1]+200,4,C.part);weight(S[0]+80,S[1]+200,50,40,'');}else if(o.kind==='tumbler'){circ(S[0]+40,S[1]+190,20);paint(C['brass-fill'],C.ink);}else springZ(S[0]-40,S[1]+30,S[0]-40,S[1]+120);
     label('WORM SLOWLY TURNS THE CAM',S[0],S[1]-80,'center');label(g.rel?'RELEASED · main wheel makes one turn':'LOCKED',Wc[0],Wc[1]+150,'center');},
   reads(){return[['State',this.g.rel?'released':'locked'],['Return by',o.kind||'spring']];}});}
-wormRelease(64,{});wormRelease(66,{kind:'weight'});wormRelease(67,{kind:'tumbler'});
+
 
 /* ---- lever and pawl drives ---- */
-function leverPawl(num,o){return reg({num,outLabel:'Ratchet wheel, turns',concept:!!o.concept,params:o.params||[],
+function leverPawl(num,o){return reg({num,outLabel:'Ratchet wheel, turns',concept:!!o.concept,params:o.params||[],o,
   reset(){this.w=0;this.last=null;},
-  update(phi){const a=(o.amp||0.35)*Math.sin(phi);if(this.last===null)this.last=a;const d=a-this.last;this.last=a;const dir=this.P.dir===undefined?1:this.P.dir;
+  lever(phi){if(!o.crank)return(o.amp||0.35)*Math.sin(phi);const O=o.O||[380,300],L=112+90,Cc=[O[0]+260,O[1]-60],pin=[Cc[0]+40*Math.cos(phi),Cc[1]+40*Math.sin(phi)];if(this.Lr===undefined){const E0=[O[0],O[1]-L];this.Lr=Math.hypot(Cc[0]-E0[0],Cc[1]-E0[1]);}
+    const E=cc(O,L,pin,this.Lr,-1);return Math.atan2(E[1]-O[1],E[0]-O[0])+PI/2;},
+  update(phi){const a=this.lever(phi);if(this.last===null)this.last=a;const d=a-this.last;this.last=a;const dir=this.P.dir===undefined?1:this.P.dir;
     this.w+=o.double?Math.abs(d)*dir:Math.max(0,d*dir)*dir;this.g={phi,a,d};},output(){return this.w/TAU;},
   draw(){const g=this.g,O=o.O||[380,300],N=o.N||20,rr=90,rt=112,dir=this.P.dir===undefined?1:this.P.dir;
     if(o.rack){/* slotted rack variant */const y=300,x0=150+this.w*rr;ctx.beginPath();ctx.rect(x0-120,y,520,30);paint(C['steel-fill'],C.ink);for(let i=0;i<24;i++){ctx.beginPath();ctx.rect(x0-110+i*22,y+8,10,14);ctx.fillStyle=C.sheet;ctx.fill();}
@@ -2140,7 +2182,7 @@ function leverPawl(num,o){return reg({num,outLabel:'Ratchet wheel, turns',concep
   reads(){const g=this.g;return[['Lever',`${(g.a*180/PI).toFixed(0)}°`],['Drives on',o.double?'both strokes':'one stroke'],['Wheel',`${(this.w/TAU).toFixed(2)} turns`]];}});}
 leverPawl(73,{label:'SPRING-DRIVEN PAWL ADVANCES THE WHEEL EACH TURN',crank:true,concept:true});
 leverPawl(75,{label:'ROD SWINGS THE BAR, PAWL TURNS THE WHEEL',crank:true});
-alias(78,77,{concept:true});
+
 leverPawl(79,{double:true,label:'PAWLS ON TWO ARMS · WHEEL MOVES ON BOTH STROKES',crank:true});
 leverPawl(80,{rack:true,double:true});
 leverPawl(83,{double:true,label:'TWO RATCHET ARCS WITH OPPOSITE TEETH',concept:true});
@@ -2159,7 +2201,7 @@ function twinRatchet(num,o){return reg({num,outLabel:'Output shaft, turns',conce
     stripeShaft(A[0],B[0],260,8,this.w,C.part2);label(o.label,400,30,'center');
     function P0y(P){return P[1]+88;}},
   reads(){return[['Input','swings both ways'],['Output','turns one way, both strokes'],['Turns',`${(this.w/TAU).toFixed(2)}`]];}});}
-twinRatchet(49,{label:'TWO OPPOSED RATCHETS MAKE THE SWING CONTINUOUS'});twinRatchet(82,{kind:'treadle',label:'TWO TREADLES, ONE CHAIN, TWO RATCHETS',concept:true});twinRatchet(390,{label:'LEVER AND BANDS TURN THE FLYWHEEL ONE WAY'});
+twinRatchet(82,{kind:'treadle',label:'TWO TREADLES, ONE CHAIN, TWO RATCHETS',concept:true});twinRatchet(390,{label:'LEVER AND BANDS TURN THE FLYWHEEL ONE WAY'});
 twinRatchet(360,{label:'ROCKING BEAM, DRUMS AND RATCHETS TURN THE SHAFT',concept:true});
 
 reg({num:116,outLabel:'Shaft turns',concept:true,
@@ -2334,7 +2376,7 @@ function solveLink(o,phi){const P=Object.assign({},o.fix);const k=o.speed||1;
     else if(t==='fn'){v=st[2](P,phi);}
     P[id]=v;}
   return P;}
-function link(num,o){return reg({num,outLabel:o.outLabel||'Output',concept:!!o.concept,params:o.params||[],
+function link(num,o){return reg({num,lo:o,outLabel:o.outLabel||'Output',concept:!!o.concept,params:o.params||[],
   reset(){this.trail=[];},
   update(phi){const oo=o.dyn?o.dyn.call(this,o):o;const P=solveLink(oo,phi);this.g={phi,P};if(o.trace){this.trail=this.trail||[];this.trail.push(P[o.trace]);if(this.trail.length>(o.tlen||320))this.trail.shift();}},
   output(){return o.out(this.g.P,this.g.phi);},
@@ -2379,7 +2421,7 @@ scottRussell(339,{label:'ONE END SLIDES IN A GUIDE · THE OTHER END RUNS STRAIGH
 scottRussell(337,{label:'SHORT SWINGING ROD REPLACES THE SLIDE',radius:[400,500],rl:190,amp:0.45,concept:true,A:[400,310]});
 
 /* ---- generic crank, slider and yoke drives ---- */
-function crankSlide(num,o){return reg({num,outLabel:'Slide position, mm',concept:!!o.concept,params:o.params||[],O:[200,280],
+function crankSlide(num,o){return reg({num,_kind:o.kind||'',outLabel:'Slide position, mm',concept:!!o.concept,params:o.params||[],O:[200,280],
   update(phi){const r=this.P.r||o.r||70,L=o.L||220,O=this.O,pin=[O[0]+r*Math.cos(phi),O[1]+r*Math.sin(phi)];let x;
     if(o.kind==='yoke'||o.kind==='slotx')x=pin[0]+L*0.5;else x=pin[0]+Math.sqrt(L*L-(pin[1]-O[1])**2);this.g={phi,pin,x,r,L};},
   output(){return this.g.x-this.O[0];},
@@ -2405,8 +2447,8 @@ function shapedYoke(num,o){return reg({num,outLabel:'Yoke position, mm',concept:
   u(phi){return o.u(mod(phi,TAU))*80;},
   update(phi){this.g={phi,u:this.u(phi)};},output(){return this.g.u;},
   draw(){const g=this.g,O=[260,270],r=80,X=O[0]+g.u;circ(O[0],O[1],110);paint(C['brass-fill'],C.ink);const pin=[O[0]+r*Math.cos(g.phi),O[1]+r*Math.sin(g.phi)];
-    ctx.save();ctx.translate(X,0);const pts=[];for(let i=0;i<=200;i++){const t=i/200*TAU;pts.push([O[0]+r*Math.cos(t)-this.u(t),O[1]+r*Math.sin(t)]);}ctx.beginPath();ctx.rect(O[0]-60,O[1]-120,120,240);paint(C['steel-fill'],C.ink);ctx.lineWidth=16;ctx.strokeStyle=C.ink;ctx.beginPath();poly(pts.map(p=>[p[0]-O[0]+O[0]-0,p[1]]),false);ctx.stroke();ctx.lineWidth=13;ctx.strokeStyle=C.sheet;ctx.stroke();ctx.restore();
-    bar(X+60,O[1],760,O[1],14,C.part);ctx.beginPath();ctx.rect(560,O[1]-24,180,8);ctx.rect(560,O[1]+16,180,8);paint(C.part2,C.ink);bar(O[0],O[1],pin[0],pin[1],10,C.part2);circ(pin[0],pin[1],7);paint(C.hi,C.ink);pivot(O[0],O[1],5);label(o.label,400,490,'center');},
+    ctx.save();ctx.translate(g.u,0);const pts=[];for(let i=0;i<=200;i++){const t=i/200*TAU;pts.push([O[0]+r*Math.cos(t)-this.u(t),O[1]+r*Math.sin(t)]);}const xs=pts.map(p=>p[0]),x0=Math.min(...xs)-22,x1=Math.max(...xs)+22;ctx.beginPath();ctx.rect(x0,O[1]-r-24,x1-x0,2*r+48);paint(C['steel-fill'],C.ink);ctx.lineWidth=16;ctx.strokeStyle=C.ink;ctx.beginPath();poly(pts.map(p=>[p[0]-O[0]+O[0]-0,p[1]]),false);ctx.stroke();ctx.lineWidth=13;ctx.strokeStyle=C.sheet;ctx.stroke();ctx.restore();
+    {const xs2=[];for(let i=0;i<=200;i++){const t=i/200*TAU;xs2.push(O[0]+r*Math.cos(t)-this.u(t));}bar(Math.max(...xs2)+22+g.u,O[1],760,O[1],14,C.part);}ctx.beginPath();ctx.rect(560,O[1]-24,180,8);ctx.rect(560,O[1]+16,180,8);paint(C.part2,C.ink);bar(O[0],O[1],pin[0],pin[1],10,C.part2);circ(pin[0],pin[1],7);paint(C.hi,C.ink);pivot(O[0],O[1],5);label(o.label,400,490,'center');},
   reads(v){return[['Yoke',`${this.g.u.toFixed(0)} mm`],['Speed',`${v.toFixed(0)} mm/s`],['Profile',o.what]];}});}
 shapedYoke(354,{u:t=>{const f=t/TAU;return f<0.5?1-4*f:-3+4*f;},label:'SHAPED GROOVE GIVES A UNIFORM SPEED',what:'constant speed each way'});
 shapedYoke(146,{u:t=>{const c=Math.cos(t);return Math.sign(c)*Math.pow(Math.abs(c),0.5);},label:'SHAPED YOKE GROOVE',what:'quick middle, slow ends',concept:true});
@@ -2434,7 +2476,6 @@ camFlat(136,{r:t=>90+30*Math.sin(t)+12*Math.sin(3*t),label:'SHAPED RIM GIVES THE
 camFlat(149,{r:t=>85+35*Math.max(0,Math.sin(t))**2,label:'CAM WORKS THE ROD THROUGH LEVERS',concept:true});
 camFlat(150,{params:[{id:'k',type:'toggle',label:'Cam fitted',options:[[0,'Short'],[1,'Medium'],[2,'Long']],value:1}],set:[0,1,2].map(k=>shapePts(t=>80+(15+15*k)*Math.max(0,Math.cos(t)))),label:'CHANGE THE CAM TO CHANGE THE VALVE TRAVEL',reads(){return[['Cam',['short','medium','long'][this.P.k]],['Travel',`${15+15*this.P.k} mm`]];}});
 camFlat(88,{r:t=>{const u=mod(t,TAU);return u<PI?110:110-60*Math.sin(u-PI);},label:'STOPS ON THE ECCENTRIC DISK · intermittent motion',concept:true});
-camFlat(166,{r:t=>{const u=mod(t,TAU)/TAU;return 70+50*(u<0.3?smooth(u/0.3):u<0.5?1:u<0.8?1-smooth((u-0.5)/0.3):0);},label:'PAUSE AT EACH END OF THE STROKE'});
 camFlat(286,{r:t=>{const u=mod(t,TAU);return u<1.2?60+60*Math.sin(u/1.2*PI):60;},label:'CURVED TOE LIFTS THE VALVE ROD',concept:true});
 camFlat(130,{r:t=>80+40*smooth((Math.cos(t)+1)/2),label:'CAM CLOSES THE SHEARS, WEIGHT OPENS THEM',concept:true,
   post(O,g){const a=-0.6+g.hy/200;bar(O[0]-160,O[1]-200,O[0]+180,O[1]-200+340*Math.sin(a)*0.3,10,C['steel-fill']);pivot(O[0]-160,O[1]-200,5);}});
@@ -2442,7 +2483,7 @@ camFlat(86,{r:t=>70+55*mod(t,TAU)/TAU,label:'CAM DRAGS THE CATCH TO RAISE THE RO
 camFlat(400,{r:t=>80+30*smooth((Math.cos(t)+1)/2),label:'CAM LIFTS THE FEED BAR · spring returns it',concept:true});
 
 /* ---- groove cam with a swinging lever (exact intersection) ---- */
-function grooveLever(num,o){return reg({num,outLabel:'Lever angle, degrees',concept:!!o.concept,F:o.F||[620,150],L:o.L||300,
+function grooveLever(num,o){return reg({num,o,outLabel:'Lever angle, degrees',concept:!!o.concept,F:o.F||[620,150],L:o.L||300,
   reset(){this.prev=null;},
   update(phi){const O=[300,290],a=phi;let best=null,bd=1e9;const n=360;let last=null;
     for(let i=0;i<=n;i++){const t=i/n*TAU,r=o.r(t),p=[O[0]+r*Math.cos(t+a),O[1]+r*Math.sin(t+a)];const f=Math.hypot(p[0]-this.F[0],p[1]-this.F[1])-this.L;if(last&&Math.sign(f)!==Math.sign(last.f)){const k=last.f/(last.f-f),q=[last.p[0]+(p[0]-last.p[0])*k,last.p[1]+(p[1]-last.p[1])*k];const d=this.prev?Math.hypot(q[0]-this.prev[0],q[1]-this.prev[1]):q[0];if(d<bd){bd=d;best=q;}}last={p,f};}
@@ -2526,10 +2567,10 @@ reg({num:348,outLabel:'Slide position, mm',concept:true,
 
 /* ---- racks, frames, double racks ---- */
 function rackFrame(num,o){return reg({num,outLabel:o.outLabel||'Frame position, mm',concept:!!o.concept,
-  update(phi){const u=mod(phi,TAU)/TAU;const tri=u<0.5?-1+4*u:3-4*u;const x=o.altGear?0:tri*120;const top=u<0.5;this.g={phi,x,top,tri};},output(){return o.altGear?this.g.tri*120/50*180/PI:this.g.x;},
-  draw(){const g=this.g,P=[400,270],rp=50,X=400+g.x;const H=(rp+14),gap=g.top?0:1;const yT=P[1]-H-(g.top?0:12),yB=P[1]+H+(g.top?12:0);
+  update(phi){const u=mod(phi,TAU)/TAU;const tri=u<0.5?-1+4*u:3-4*u;const x=o.altGear?0:tri*50*PI/2;const top=u<0.5;this.g={phi,x,top,tri};},output(){return o.altGear?this.g.tri*120/50*180/PI:this.g.x;},
+  draw(){const g=this.g,P=[400,270],rp=50,X=400+g.x;const H=(rp+6.25),gap=g.top?0:1;const yT=P[1]-H-(g.top?0:12),yB=P[1]+H+(g.top?12:0);
     ctx.beginPath();ctx.rect(X-260,yT-30,520,yB-yT+60);ctx.rect(X-250,yT,500,yB-yT);paint(C['steel-fill'],C.ink);
-    const len=o.part?260:500;for(const [y,dir] of [[yT,1],[yB,-1]]){for(let i=0;i<len/20;i++){const x=X-len/2+i*20;poly([[x,y],[x+6,y+dir*12],[x+14,y+dir*12],[x+20,y]]);ctx.closePath();paint(C['steel-fill'],C.ink,.9);}}
+    const len=o.part?260:500;const mm=5,pp=PI*mm,c0=X+(g.top?0:pp/2);for(const [y,dir] of [[yT,1],[yB,-1]]){const yp=y+dir*1.25*mm,pts=rackTeeth(X-len/2,X+len/2,c0,pp,yp,mm,dir>0);poly([[X-len/2,y],...pts,[X+len/2,y]]);ctx.closePath();paint(C['steel-fill'],C.ink,.9);}
     const ga=o.altGear?g.tri*2.4:g.phi;drawGear(P[0],P[1],rp,20,ga,C['brass-fill'],{bore:6});pivot(P[0],P[1],5);
     if(o.cam){const c=[P[0],P[1]+170];ctx.beginPath();ctx.ellipse(c[0],c[1],40,26,g.phi,0,TAU);paint(C.part,C.ink);}
     label(o.label,400,490,'center');label(g.top?'UPPER RACK IN MESH':'LOWER RACK IN MESH',400,40,'center');},
@@ -2558,9 +2599,9 @@ function screwShaft(x0,x1,y,r,ang,lead){ctx.beginPath();ctx.rect(x0,y-r,x1-x0,2*
 function screwSlide(num,o){return reg({num,outLabel:'Slide position, mm',concept:!!o.concept,params:o.params||[],
   reset(){this.x=0;this.last=null;this.dir=1;},
   update(phi){if(this.last===null)this.last=phi;const d=phi-this.last;this.last=phi;const lead=(this.P.lead||o.lead||16);
-    if(o.kind==='traverse'){this.x+=this.dir*d/TAU*lead*2;if(this.x>200){this.x=200;this.dir=-1;}if(this.x<-200){this.x=-200;this.dir=1;}}else{this.x=lead*phi/TAU;if(o.wrap)this.x=mod(this.x+200,400)-200;}
-    this.g={phi,lead};},output(){return this.x;},
-  draw(){const g=this.g,y=280,X=400+this.x;if(o.kind==='traverse'){screwShaft(150,650,y-30,14,g.phi,24);screwShaft(150,650,y+30,14,-g.phi,24);ctx.save();ctx.strokeStyle=C.ink;ctx.restore();}else screwShaft(150,650,y,18,g.phi,g.lead);
+    let th=phi;if(o.kind==='traverse'){this.x+=this.dir*d/TAU*lead*2;if(this.x>200){this.x=200;this.dir=-1;}if(this.x<-200){this.x=-200;this.dir=1;}}else{const A=180/lead*TAU;th=A*Math.sin(phi/A);this.x=lead*th/TAU;}
+    this.g={phi,lead,th};},output(){return this.x;},
+  draw(){const g=this.g,y=280,X=400+this.x;if(o.kind==='traverse'){screwShaft(150,650,y-30,14,g.phi,24);screwShaft(150,650,y+30,14,-g.phi,24);ctx.save();ctx.strokeStyle=C.ink;ctx.restore();}else screwShaft(150,650,y,18,g.th,g.lead);
     ctx.beginPath();ctx.rect(110,y-60,30,120);ctx.rect(660,y-60,30,120);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(X-40,y-50,80,100);paint(C['steel-fill'],C.ink);
     if(o.kind==='traverse'){label(this.dir>0?'NUT ON THE RIGHT-HAND SCREW':'NUT ON THE LEFT-HAND SCREW',400,140,'center');}
     if(o.gears){drawGear(90,y+120,40,16,g.phi*2,C.part,{bore:4});drawGear(90,y+40,40,16,-g.phi*2,C['brass-fill'],{bore:4});}
@@ -2584,7 +2625,7 @@ function wormWheel(num,o){return reg({num,outLabel:'Wheel turns',concept:!!o.con
     label(o.label,400,30,'center');},
   reads(){return[['Ratio',`${o.z||30} : 1`],['Reversible','no · the wheel cannot drive the worm']];}});}
 wormWheel(104,{label:'SCREW AND WHEEL'});wormWheel(195,{rolls:true,label:'WORM BETWEEN TWO WHEELS DRIVES THE FEED ROLLS',concept:true});wormWheel(207,{two:true,rolls:true,label:'TWIN WORMS AND WORM WHEELS',concept:true});
-wormWheel(275,{rack:true,label:'WORM DRIVES THE RACK'});wormWheel(143,{label:'WORM ON A SLIDING SHAFT · the wheel rod gives the traverse',concept:true});
+wormWheel(275,{rack:true,label:'WORM DRIVES THE RACK'});
 
 reg({num:167,outLabel:'Drum turns',
   update(phi){const u=mod(phi,TAU)/TAU;const x=u<0.5?-1+4*u:3-4*u;this.g={phi,x:x*140};},output(){return this.g.phi/TAU;},
@@ -2836,8 +2877,8 @@ gyro(355,{});gyro(356,{gimbal:true});
 /* ---- hammers ---- */
 function airHammer(num,o){return reg({num,outLabel:'Hammer height, mm',concept:true,
   update(phi){const y=60*(1+Math.sin(phi))/2+10;this.g={phi,y,up:Math.cos(phi)>0};},output(){return this.g.y;},
-  draw(){const g=this.g,X=420;ctx.beginPath();ctx.rect(X-60,80,120,260);ctx.rect(X-50,90,100,240);paint(C.part2,C.ink);const hy=320-g.y*2;steamBox(X-50,90,100,hy-90,!g.up);ctx.beginPath();ctx.rect(X-50,hy,100,20);paint(C['steel-fill'],C.ink);bar(X,hy+20,X,400-g.y,16,C.part);ctx.beginPath();ctx.rect(X-60,400-g.y,120,50);paint(C['steel-fill'],C.ink);ctx.beginPath();ctx.rect(X-90,460,180,30);paint(C.part2,C.ink);
-    if(o.pump){const O=[180,250],pin=[O[0]+40*Math.cos(g.phi),O[1]+40*Math.sin(g.phi)];flywheel(O[0],O[1],70,g.phi);ctx.beginPath();ctx.rect(240,150,50,140);paint(C.part2,C.ink);bar(pin[0],pin[1],265,200+20*Math.sin(g.phi),8,C.part);rope([[290,170],[X-60,170]]);label('PUMP AND RESERVOIR',220,340,'center');}
+  draw(){const g=this.g,X=420;ctx.beginPath();ctx.rect(X-60,80,120,260);ctx.rect(X-50,90,100,240);paint(C.part2,C.ink);const hy=320-g.y;steamBox(X-50,90,100,hy-90,!g.up);ctx.beginPath();ctx.rect(X-50,hy,100,20);paint(C['steel-fill'],C.ink);bar(X,hy+20,X,400-g.y,16,C.part);ctx.beginPath();ctx.rect(X-60,400-g.y,120,50);paint(C['steel-fill'],C.ink);ctx.beginPath();ctx.rect(X-90,460,180,30);paint(C.part2,C.ink);
+    if(o.pump){const O=[180,250],pin=[O[0]+40*Math.cos(g.phi),O[1]+40*Math.sin(g.phi)];flywheel(O[0],O[1],70,g.phi);const py=pin[1]-Math.sqrt(140*140-(265-pin[0])**2);ctx.beginPath();ctx.rect(240,50,50,210);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(242,py-10,46,14);paint(C['steel-fill'],C.ink);bar(pin[0],pin[1],265,py,8,C.part);pivot(pin[0],pin[1],4);rope([[290,70],[X-60,100]]);label('PUMP AND RESERVOIR',220,340,'center');}
     label(o.label,400,30,'center');},
   reads(){return[['Stroke',this.g.up?'lifting':'falling']];}});}
 airHammer(471,{label:'ATMOSPHERIC HAMMER'});airHammer(472,{pump:true,label:'AIR HAMMER FED BY A CRANK-DRIVEN PUMP'});
@@ -3354,7 +3395,1795 @@ reg({num:496,outLabel:'Spindle turns',
     label('EACH PAIR OF ROLLERS RUNS FASTER · the fibre is drawn out thin',300,120,'center');label('THROSTLE SPINDLE TWISTS AND WINDS IT',600,480,'center');},
   reads(){return[['Draft','3 ×'],['Roller speeds','1 : 1.6 : 3']];}});
 
+/* ================= audit pass · ropes and pulley systems (12–22) ================= */
+/* ---- rope engine: a rope runs from a point, round circles (sheaves) and ends at a point.
+   node = {c:[x,y], r, s}: s=+1 the rope travels clockwise on screen round it (over the top left→right), s=-1 anticlockwise (under, left→right).
+   Returns the polyline and the rope length up to the middle of each sheave's wrap (for sheave rotation). */
+function tanLine(A,B){const ra=A.r||0,rb=B.r||0,sa=A.s||1,sb=B.s||1,dx=B.c[0]-A.c[0],dy=B.c[1]-A.c[1],D=Math.hypot(dx,dy)||1e-9,th=Math.atan2(dy,dx);
+  const k=(ra-sa*sb*rb)/D;if(Math.abs(k)>1)return null;let best=null;
+  for(const sg of [1,-1]){const a=th+sg*Math.acos(k);const p1=[A.c[0]+ra*Math.cos(a),A.c[1]+ra*Math.sin(a)];const dir=ra>0?[-sa*Math.sin(a),sa*Math.cos(a)]:null;
+    /* tangent point on B */let p2;if(rb>0){const b=a+(sa*sb>0?0:PI);p2=[B.c[0]+rb*Math.cos(b),B.c[1]+rb*Math.sin(b)];}else p2=B.c.slice();
+    const v=[p2[0]-p1[0],p2[1]-p1[1]];if(dir&&v[0]*dir[0]+v[1]*dir[1]<=1e-9)continue;
+    if(rb>0){const b=Math.atan2(p2[1]-B.c[1],p2[0]-B.c[0]);const tb=[-sb*Math.sin(b),sb*Math.cos(b)];if(v[0]*tb[0]+v[1]*tb[1]<=1e-9)continue;}
+    best={p1,p2};break;}
+  return best;}
+function ropeThru(nodes,step=4){const segs=[];for(let i=0;i<nodes.length-1;i++)segs.push(tanLine(nodes[i],nodes[i+1]));
+  const pts=[],mids=[];let L=0;const push=p=>{if(pts.length){const q=pts[pts.length-1];L+=Math.hypot(p[0]-q[0],p[1]-q[1]);}pts.push(p);};
+  for(let i=0;i<nodes.length;i++){const N=nodes[i];
+    if(N.r>0&&i>0&&i<nodes.length-1&&segs[i-1]&&segs[i]){const a0=Math.atan2(segs[i-1].p2[1]-N.c[1],segs[i-1].p2[0]-N.c[0]),a1=Math.atan2(segs[i].p1[1]-N.c[1],segs[i].p1[0]-N.c[0]);
+      let d=N.s>0?mod(a1-a0,TAU):-mod(a0-a1,TAU);const n=Math.max(2,Math.ceil(Math.abs(d)*N.r/step));let Lm=0;
+      for(let k=0;k<=n;k++){const a=a0+d*k/n;push([N.c[0]+N.r*Math.cos(a),N.c[1]+N.r*Math.sin(a)]);if(k===Math.floor(n/2))Lm=L;}mids[i]=Lm;}
+    else{if(i===0)push(N.c.slice());else if(segs[i-1])push(segs[i-1].p2);}}
+  return{pts,len:L,mids};}
+/* draw a rope: dark core with light marks fixed to the rope material (they move with it) */
+function drawRope(pts,off=0,w=2.6){if(pts.length<2)return;ctx.save();ctx.lineJoin='round';ctx.lineCap='round';ctx.beginPath();poly(pts);ctx.strokeStyle=C.ink;ctx.lineWidth=w;ctx.stroke();
+  ctx.setLineDash([3,9]);ctx.lineDashOffset=off;ctx.strokeStyle=C.sheet;ctx.lineWidth=w*0.45;ctx.stroke();ctx.restore();}
+/* a sheave in a block: grooved wheel with spokes, turning by angle a */
+function sheave(x,y,r,a,fill){circ(x,y,r+3);paint(C.part,C.ink,1.1);pulley(x,y,r,a,fill);}
+function blockStrap(x0,y0,x1,y1,r){ctx.save();ctx.beginPath();ctx.roundRect(x0-r-7,y0-r-7,x1-x0+2*r+14,y1-y0+2*r+14,r*0.6+6);ctx.strokeStyle=C.ink;ctx.lineWidth=1.3;ctx.fillStyle=C.part2;ctx.globalAlpha=0.35;ctx.fill();ctx.globalAlpha=1;ctx.stroke();ctx.restore();}
+function hookAt(x,y,len=18){ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=2.4;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+len);ctx.arc(x+6,y+len,6,PI,PI*0.1,true);ctx.stroke();ctx.restore();}
+function beam(x0,x1,y){ctx.beginPath();ctx.rect(x0,y-14,x1-x0,14);paint(C.part2,C.ink);ctx.save();ctx.beginPath();ctx.rect(x0,y-14,x1-x0,14);ctx.clip();ctx.strokeStyle=C.muted;ctx.lineWidth=1;for(let x=x0-20;x<x1;x+=12){ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+14,y-14);ctx.stroke();}ctx.restore();}
+function anchor(x,y){ctx.beginPath();ctx.rect(x-6,y-2,12,7);paint(C.part,C.ink);}
+function loadBox(x,y,w,h,t='LOAD'){ctx.beginPath();ctx.roundRect(x-w/2,y,w,h,4);paint(C['steel-fill'],C.ink);label(t,x,y+h/2+4,'center');}
+function grip(x,y){ctx.beginPath();ctx.roundRect(x-9,y,18,30,5);paint(C['brass-fill'],C.ink);label('PULL',x+14,y+19);}
+function gripH(x,y){ctx.beginPath();ctx.roundRect(x,y-9,30,18,5);paint(C['brass-fill'],C.ink);label('PULL',x+6,y-14);}
+
+/* generic pulley system: cfg(d) -> {sheaves:{id:{c,r,fill,block}}, ropes:[{nodes:[...ids or points], start}], draw extras}; MA = mechanical advantage */
+function pulleySys(num,o){return reg({num,outLabel:'Load raised, mm',
+  reset(){this.rot={};this.prevMid=null;},
+  update(phi){const e=o.stroke*(1-Math.cos(phi))/2,d=e/o.MA;const L=o.layout(d,e);
+    /* sheave rotation from rope passing over it: change in rope length up to the sheave's wrap midpoint */
+    const mids={};L.ropes.forEach((rp,ri)=>{const nodes=rp.map(n=>typeof n==='string'?Object.assign({id:n},L.sh[n]):{c:n,r:0});const R=ropeThru(nodes);rp._R=R;
+      nodes.forEach((n,i)=>{if(n.id&&R.mids[i]!==undefined&&mids[n.id]===undefined)mids[n.id]=R.mids[i]*(-n.s)/n.r;});});
+    if(!this.rot)this.rot={};if(this.prevMid)for(const k in mids)this.rot[k]=(this.rot[k]||0)+(mids[k]-(this.prevMid[k]??mids[k]));
+    this.prevMid=mids;this.g={phi,e,d,L};},
+  output(){return this.g.d;},
+  draw(){const g=this.g,L=g.L;beam(o.beam[0],o.beam[1],o.beamY||46);if(L.under)L.under();
+    for(const k in L.sh){const s=L.sh[k];if(s.block)blockStrap(...s.block);}
+    for(const rp of L.ropes)drawRope(rp._R.pts,0);
+    for(const k in L.sh){const s=L.sh[k];if(s.hidden)continue;sheave(s.c[0],s.c[1],s.r,(this.rot[k]||0)+(s.a0||0),s.fill||(s.fixed?C.part2:C['steel-fill']));}
+    if(L.over)L.over();if(o.note)label(o.note,400,505,'center');},
+  reads(){const g=this.g;return[['Mechanical advantage',`${o.MA} : 1`],['Rope pulled',`${g.e.toFixed(0)} mm`],['Load raised',`${g.d.toFixed(1)} mm`],['Force needed',`1/${o.MA} of the load (ignoring friction)`]];}});}
+
+/* 12 single fixed pulley: changes direction only */
+pulleySys(12,{MA:1,stroke:120,beam:[300,500],note:'A FIXED PULLEY ONLY CHANGES THE DIRECTION OF THE PULL',layout(d,e){
+  return{sh:{F:{c:[400,110],r:40,s:1,fixed:1}},ropes:[[[360,330-d],'F',[440,330+e]]],
+    load:[360,330-d,80,60],grip:[440,330+e],under(){bar(400,46,400,110,8,C.part);},over(){loadBox(360,330-d,80,60);anchor(360,330-d);grip(440,330+e);}};}});
+/* 13 one movable pulley */
+pulleySys(13,{MA:2,stroke:160,beam:[260,540],note:'ONE MOVABLE PULLEY · two ropes share the load',layout(d,e){const y=300-d;
+  return{sh:{M:{c:[360,y],r:40,s:-1},F:{c:[440,110],r:40,s:1,fixed:1}},ropes:[[[320,46],'M','F',[480,380+e]]],
+    load:[360,y+58,90,56],grip:[480,380+e],under(){bar(440,46,440,110,8,C.part);anchor(320,46);},over(){bar(360,y,360,y+58,6,C.part);loadBox(360,y+58,90,56);grip(480,380+e);}};}});
+/* 14 blocks and tackle, two double blocks: four ropes */
+pulleySys(14,{MA:4,stroke:160,beam:[260,560],note:'TWO DOUBLE BLOCKS · four ropes hold the lower block',layout(d,e){const r=24,a=300,yU=112,yL=320-d;
+  const sh={L1:{c:[a+r,yL],r,s:-1},U1:{c:[a+3*r,yU],r,s:1,fixed:1},L2:{c:[a+5*r,yL],r,s:-1},U2:{c:[a+7*r,yU],r,s:1,fixed:1}};
+  sh.U1.block=[a+3*r,yU,a+7*r,yU,r];sh.L1.block=[a+r,yL,a+5*r,yL,r];
+  return{sh,ropes:[[[a,yU+r+7],'L1','U1','L2','U2',[a+8*r,380+e]]],
+    load:[a+3*r,yL+60,110,56],grip:[a+8*r,380+e],under(){bar(a+5*r,46,a+5*r,yU-r-7,8,C.part);},over(){anchor(a,yU+r+7);bar(a+3*r,yL+r+7,a+3*r,yL+60,6,C.part);loadBox(a+3*r,yL+60,110,56);grip(a+8*r,380+e);}};}});
+/* 15 White's pulleys: grooves of graded sizes on one axle per block, so every groove turns as one */
+pulleySys(15,{MA:6,stroke:120,beam:[260,560],note:'WHITE’S TACKLE · stepped grooves on one axle per block',layout(d,e){const X=400,yU=118,yL=350-d,lo=[14,38,62],up=[26,50,74];
+  const sh={};lo.forEach((r,i)=>sh['L'+i]={c:[X,yL],r,s:-1,hidden:1});up.forEach((r,i)=>sh['U'+i]={c:[X,yU],r,s:-1,fixed:1,hidden:1});
+  return{sh,ropes:[[[X-14,yU+84],'L0','U0','L1','U1','L2','U2',[X-74,330+e]]],
+    load:[X,yL+92,110,50],grip:[X-74,330+e],under(){bar(X,46,X,yU-80,8,C.part);},
+    over:()=>{const S=SIMS_NEW[15];const draw=(x,y,rs,a,f)=>{for(let i=rs.length-1;i>=0;i--){circ(x,y,rs[i]+(i===rs.length-1?4:0));paint(i===rs.length-1?C.part:f,C.ink,1);}circ(x,y,rs[0]-4);paint(f,C.ink,1);
+        ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=1;for(let k=0;k<6;k++){const t=a+k*PI/3;ctx.beginPath();ctx.moveTo(x+6*Math.cos(t),y+6*Math.sin(t));ctx.lineTo(x+(rs[rs.length-1]-3)*Math.cos(t),y+(rs[rs.length-1]-3)*Math.sin(t));ctx.stroke();}ctx.restore();pivot(x,y,5);};
+      draw(X,yL,lo,(S.rot&&S.rot.L0)||0,C['steel-fill']);draw(X,yU,up,(S.rot&&S.rot.U0)||0,C.part2);
+      for(const rp of S.g.L.ropes)drawRope(rp._R.pts,0,2.2);anchor(X-14,yU+84);bar(X,yL+66,X,yL+92,6,C.part);loadBox(X,yL+92,110,50);grip(X-74,330+e);}};}});
+/* 16 Spanish barton, single: two ropes, power 3 */
+pulleySys(16,{MA:3,stroke:150,beam:[260,560],note:'SPANISH BARTON · the second pulley hangs from the first rope · power 3',layout(d,e){const F={c:[400,110],r:32,s:1,fixed:1};const yL=380-d,yM=200+d;/* M falls as the load rises */
+  const M={c:[432,yM],r:28,s:1};return{sh:{F,M},ropes:[[[368,yL],'F',[432,yM-28-9]],[[404,yL],'M',[460,330+e]]],
+    load:[386,yL,100,56],grip:[460,330+e],under(){bar(400,46,400,110-32,8,C.part);},over(){bar(432,yM-28-9,432,yM,5,C.part);loadBox(386,yL,100,56);anchor(368,yL);anchor(404,yL);grip(460,330+e);}};}});
+/* 17 Spanish barton, double: power 5 */
+pulleySys(17,{MA:5,stroke:170,beam:[230,600],note:'DOUBLE SPANISH BARTON · power 5',layout(d,e){const yL=400-d,r=26;const P={c:[340,yL-26],r,s:-1},F={c:[392,110],r,s:1,fixed:1},yM=250+2*d,M={c:[418,yM],r:24,s:1};
+  return{sh:{P,F,M},ropes:[[[314,46],'P','F',[418,yM-24-9]],[[394,yL],'M',[442,360+e]]],
+    load:[380,yL,150,52],grip:[442,360+e],under(){bar(392,46,392,110-r,8,C.part);anchor(314,46);},over(){bar(418,yM-24-9,418,yM,5,C.part);loadBox(380,yL,150,52);bar(340,yL-26,340,yL,5,C.part);anchor(394,yL);grip(442,360+e);}};}});
+/* 18 two fixed pulleys and one movable */
+pulleySys(18,{MA:2,stroke:150,beam:[260,520],note:'TWO FIXED PULLEYS, ONE MOVABLE · the lower fixed pulley turns the pull sideways',layout(d,e){const yM=300-d;
+  return{sh:{M:{c:[340,yM],r:40,s:-1},F1:{c:[420,110],r:40,s:1,fixed:1},F2:{c:[490,440],r:30,s:-1,fixed:1}},ropes:[[[300,46],'M','F1','F2',[560+e,470]]],
+    load:[340,yM+56,90,50],grip:[560+e,470,1],under(){bar(420,46,420,110,8,C.part);anchor(300,46);ctx.beginPath();ctx.rect(440,470,120,12);paint(C.part2,C.ink);bar(490,440,490,470,8,C.part);},
+    over(){bar(340,yM,340,yM+56,6,C.part);loadBox(340,yM+56,90,50);gripH(560+e,470);}};}});
+/* 19–22 systems where each movable pulley hangs in its own cord: effect = 2 to the power of the number of movable pulleys */
+function cascadeSys(num,n,o={}){const MA=2**n,r=o.r||30,mir=o.mirror?-1:1;
+  return pulleySys(num,{MA,stroke:o.stroke||160,beam:o.beam||[150,650],note:`${n} MOVABLE PULLEYS, EACH IN ITS OWN CORD · effect 2${'⁰¹²³⁴⁵'[n]} = ${MA}`,layout(d,e){
+    const sh={},ropes=[],X0=o.x0||300,Y0=o.y0||430,dy=o.dy||84;let x=X0;
+    for(let i=0;i<n;i++){const y=Y0-i*dy-(2**i)*d;sh['M'+i]={c:[x,y],r,s:-mir};x+=mir*r;}
+    for(let i=0;i<n;i++){const c=sh['M'+i].c;const end=i<n-1?[sh['M'+(i+1)].c[0],sh['M'+(i+1)].c[1]+r+16]:null;
+      if(end)ropes.push([[c[0]-mir*r,46],'M'+i,end]);}
+    const top=sh['M'+(n-1)].c;let tail;
+    if(o.direct){tail=[[top[0]-mir*r,46],'M'+(n-1),[top[0]+mir*r,220-e]];ropes.push(tail);}
+    else{sh.F={c:[top[0]+mir*2*r,92],r,s:mir,fixed:1};ropes.push([[top[0]-mir*r,46],'M'+(n-1),'F',[top[0]+mir*3*r,300+e]]);}
+    return{sh,ropes,load:[sh.M0.c[0],sh.M0.c[1]+r+22,90,48],grip:o.direct?[top[0]+mir*r,190-e]:[top[0]+mir*3*r,300+e],under(){if(sh.F)bar(sh.F.c[0],46,sh.F.c[0],92,7,C.part);for(let i=0;i<n;i++)anchor(sh['M'+i].c[0]-mir*r,46);},
+      over(){for(let i=1;i<n;i++){const c=sh['M'+i].c;hookAt(c[0],c[1],r+10);}const c0=sh.M0.c;bar(c0[0],c0[1],c0[0],c0[1]+r+22,6,C.part);loadBox(c0[0],c0[1]+r+22,90,48);
+        if(o.direct)grip(top[0]+mir*r,190-e);else grip(top[0]+mir*3*r,300+e);}};}});}
+cascadeSys(19,3,{y0:390});cascadeSys(20,2,{direct:true,x0:340,y0:420,dy:110,r:36,stroke:120});cascadeSys(21,3,{mirror:true,x0:500,y0:390,beam:[150,650]});cascadeSys(22,4,{r:24,y0:388,dy:64,x0:280,stroke:160});
+
+/* ================= audit pass · pseudo-3D drawing kit and belts between shafts at right angles (3, 4, 11, 243) ================= */
+/* orthographic camera: world z up. yaw turns about z, pitch tilts toward the viewer. P(p) -> [sx, sy, depth] (bigger depth = farther) */
+function cam3(yaw,pitch,sc,cx,cy){const cy_=Math.cos(yaw),sy_=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+  return p=>{const x=p[0]*cy_-p[1]*sy_,y=p[0]*sy_+p[1]*cy_,z=p[2];/* view: x right, y into screen, z up */return[cx+sc*x,cy-sc*(z*cp-y*sp),y*cp+z*sp];};}
+const v3={add:(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]],sub:(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],mul:(a,k)=>[a[0]*k,a[1]*k,a[2]*k],
+  dot:(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],cross:(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],
+  norm:a=>{const l=Math.hypot(a[0],a[1],a[2])||1;return[a[0]/l,a[1]/l,a[2]/l];},len:a=>Math.hypot(a[0],a[1],a[2])};
+/* a circle in 3D: centre c, in-plane unit axes u,v (normal = u×v) */
+function circ3(c,u,v,r){return{c,u,v,r,n:v3.cross(u,v),at(t,rr){rr=rr??r;return v3.add(c,v3.add(v3.mul(u,rr*Math.cos(t)),v3.mul(v,rr*Math.sin(t))));},
+  loc(p){const d=v3.sub(p,c);return[v3.dot(d,u),v3.dot(d,v)];}};}
+/* tangent from point P (lying in the circle's plane) to circle K, the belt then running round K with sense s (+1 = increasing angle) */
+function tanFromPoint(P,K,s){const [x,y]=K.loc(P),d=Math.hypot(x,y),th=Math.atan2(y,x),al=Math.acos(Math.min(1,K.r/d));
+  for(const t of [th+al,th-al]){const T=[K.r*Math.cos(t),K.r*Math.sin(t)],dir=[T[0]-x,T[1]-y],tg=[-s*Math.sin(t),s*Math.cos(t)];if(dir[0]*tg[0]+dir[1]*tg[1]>0)return t;}return th;}
+/* tangent from circle K (leaving with sense s) to point P in its plane */
+function tanToPoint(K,P,s){const [x,y]=K.loc(P),d=Math.hypot(x,y),th=Math.atan2(y,x),al=Math.acos(Math.min(1,K.r/d));
+  for(const t of [th+al,th-al]){const T=[K.r*Math.cos(t),K.r*Math.sin(t)],dir=[x-T[0],y-T[1]],tg=[-s*Math.sin(t),s*Math.cos(t)];if(dir[0]*tg[0]+dir[1]*tg[1]>0)return t;}return th;}
+function arc3(K,t0,t1,s,step=0.12){let d=s>0?mod(t1-t0,TAU):-mod(t0-t1,TAU);const n=Math.max(2,Math.ceil(Math.abs(d)/step)),o=[];for(let k=0;k<=n;k++)o.push(K.at(t0+d*k/n));return o;}
+/* painter's list */
+function scene(){const items=[];return{add(depth,fn){items.push([depth,fn]);},draw(){items.sort((a,b)=>b[0]-a[0]);for(const [,f] of items)f();}};}
+/* draw a pulley disk of width w along its normal, with spokes turning by angle a, face fill f */
+function disk3(Sc,P,K,w,a,f,o={}){const n=K.n,F=v3.add(K.c,v3.mul(n,w/2)),B=v3.sub(K.c,v3.mul(n,w/2));const N=48;
+  const rim=(c)=>{const o=[];for(let i=0;i<N;i++){const t=i/N*TAU;o.push(P(v3.add(c,v3.add(v3.mul(K.u,K.r*Math.cos(t)),v3.mul(K.v,K.r*Math.sin(t))))));}return o;};
+  const fr=rim(F),br=rim(B);const front=P(F)[2]<P(B)[2]?F:B,fp=front===F?fr:br;const dc=P(K.c)[2];
+  Sc.add(dc+0.01,()=>{const all=fr.concat(br).map(p=>[p[0],p[1]]);const h=hullPts(all);poly(h);ctx.closePath();paint(f,C.ink,1.1);
+    poly(fp);ctx.closePath();paint(f,C.ink,1.1);ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=1;const ns=o.spokes??4;
+    for(let i=0;i<ns;i++){const t=a+i*TAU/ns;const p0=P(v3.add(front,v3.add(v3.mul(K.u,K.r*0.18*Math.cos(t)),v3.mul(K.v,K.r*0.18*Math.sin(t))))),p1=P(v3.add(front,v3.add(v3.mul(K.u,K.r*0.82*Math.cos(t)),v3.mul(K.v,K.r*0.82*Math.sin(t)))));ctx.beginPath();ctx.moveTo(p0[0],p0[1]);ctx.lineTo(p1[0],p1[1]);ctx.stroke();}
+    const ring=[];for(let i=0;i<N;i++){const t=i/N*TAU;ring.push(P(v3.add(front,v3.add(v3.mul(K.u,K.r*0.82*Math.cos(t)),v3.mul(K.v,K.r*0.82*Math.sin(t))))));}poly(ring);ctx.closePath();ctx.lineWidth=0.7;ctx.stroke();ctx.restore();
+    const hc=P(front);circ(hc[0],hc[1],3.5);paint(C.hi,C.ink,1);});}
+function hullPts(pts){pts=pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]);const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);const lo=[],up=[];
+  for(const p of pts){while(lo.length>1&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p);}for(let i=pts.length-1;i>=0;i--){const p=pts[i];while(up.length>1&&cr(up[up.length-2],up[up.length-1],p)<=0)up.pop();up.push(p);}up.pop();lo.pop();return lo.concat(up);}
+/* shaft from a to b (world), radius r */
+function shaft3(Sc,P,a,b,r,f){const A=P(a),B=P(b);Sc.add((A[2]+B[2])/2+0.02,()=>{bar(A[0],A[1],B[0],B[1],2*r,f||C.part);});}
+/* belt: 3D polyline drawn in short depth-sorted pieces, with marks fixed to the belt material */
+function belt3(Sc,P,pts,travel,w=6){const n=pts.length;let s=0;const L=[0];for(let i=1;i<n;i++){s+=v3.len(v3.sub(pts[i],pts[i-1]));L.push(s);}
+  for(let i=0;i<n-1;i++){const a=P(pts[i]),b=P(pts[i+1]);const l0=L[i];Sc.add((a[2]+b[2])/2,()=>{ctx.save();ctx.lineCap='round';ctx.strokeStyle=C.ink;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();
+    ctx.strokeStyle=C.part2;ctx.lineWidth=w-2.4;ctx.stroke();ctx.setLineDash([4,14]);ctx.lineDashOffset=-(l0-travel);ctx.strokeStyle=C.ink;ctx.lineWidth=w-2.4;ctx.lineCap='butt';ctx.stroke();ctx.restore();});}}
+
+/* ---- right-angle belts. A: driving pulley on a horizontal shaft (plane y=0). Belt geometry obeys the rule that each strand must arrive in the plane of the pulley it runs onto. ---- */
+function rightAngleBelt(num,o){return reg({num,outLabel:'Driven pulley, turns',
+  update(phi){this.g={phi};this.geo=this.geo||o.geo();},output(){return -this.g.phi*this.geo.ratio/TAU;},
+  draw(){const g=this.g,G=this.geo,P=cam3(o.yaw??-0.55,o.pitch??0.42,1,o.cx??400,o.cy??300),Sc=scene();
+    const travel=g.phi*G.A.r;for(const b of G.pulleys)disk3(Sc,P,b.K,b.w||16,b.ang(g.phi),b.f||C['steel-fill']);
+    for(const s of G.shafts)shaft3(Sc,P,s[0],s[1],s[2]||5,s[3]);belt3(Sc,P,G.belt,travel,6);Sc.draw();
+    if(o.labels)o.labels(P,G);label(o.note,400,500,'center');},
+  reads(v){return[['Shafts','at right angles'],['Speed ratio',`${this.geo.ratio.toFixed(2)} × driver`],['Driven',rpmOf(Math.abs(v))]];}});}
+/* belt length helpers */
+function pathPts(...segs){const o=[];for(const s of segs)for(const p of s){if(o.length&&v3.len(v3.sub(o[o.length-1],p))<1e-6)continue;o.push(p);}return o;}
+function lenTo(pts,K){/* rope length from start to the point of pts nearest the middle of K's wrap is not needed: pulleys turn at belt speed / r */return 0;}
+
+/* 4 · quarter-twist belt: B horizontal, level with the top of A, and tangent to A's plane; A's top lies in B's plane */
+const QT=(R,rB,xB,side)=>()=>{const A=circ3([0,0,0],[1,0,0],[0,0,1],R);/* A in xz plane, angle measured from +x toward +z */
+  const zB=R,B=circ3([xB,side*rB,zB],[1,0,0],[0,1,0],rB);/* horizontal */
+  const sA=-1;/* A turns so its top moves toward +x */const top=A.at(PI/2);
+  const sB=-side;/* wrap sense on B so the strand from A's top arrives tangentially */
+  const t1=tanFromPoint(top,B,sB);const dep=Math.atan2(-side*rB,0)/* point of B lying in y=0 */,tdep=side>0?-PI/2:PI/2;
+  const Pdep=B.at(tdep);const ta=tanFromPoint(Pdep,A,sA);
+  const belt=pathPts([top],arc3(B,t1,tdep,sB),arc3(A,ta,PI/2,sA)).concat([top]);
+  return{A,ratio:R/rB,belt,pulleys:[{K:A,w:18,ang:p=>-p,f:C['brass-fill']},{K:B,w:18,ang:p=>sB*p*R/rB,f:C['steel-fill']}],
+    shafts:[[[0,-90,0],[0,60,0],6,C.part],[[xB,side*rB,zB-130],[xB,side*rB,zB+120],6,C.part]]};};
+rightAngleBelt(4,{geo:QT(90,70,190,1),note:'QUARTER-TWIST BELT · each strand runs onto its pulley in that pulley’s own plane',yaw:-0.62,pitch:0.38,cx:330,cy:300});
+rightAngleBelt(11,{geo:QT(70,95,170,-1),note:'ANOTHER QUARTER-TWIST LAYOUT · driven pulley larger and on the far side',yaw:-0.5,pitch:0.42,cx:330,cy:300});
+/* 3 · with guide pulleys: A above, B horizontal below and set back; two guides turn the strands from vertical to horizontal */
+rightAngleBelt(3,{note:'GUIDE PULLEYS TURN EACH STRAND INTO THE PLANE OF THE NEXT PULLEY',yaw:-0.75,pitch:0.36,cx:390,cy:200,geo:()=>{const R=80,rg=34,zg=-150,yB=170;
+  const A=circ3([0,0,0],[1,0,0],[0,0,1],R);const G1=circ3([R,rg,zg],[0,0,1],[0,1,0],rg),G2=circ3([-R,rg,zg],[0,0,1],[0,1,0],rg);
+  const zB=zg-rg,B=circ3([0,yB,zB],[1,0,0],[0,1,0],R);
+  /* right strand goes down from A's right side, round G1 (angle 0 = up, PI/2 = +y), out along +y to B's right side, round B, back along -y to G2, up to A's left */
+  const belt=pathPts([A.at(0)],arc3(G1,-PI/2,-PI,-1),arc3(B,0,PI,1),arc3(G2,PI,1.5*PI,1),arc3(A,PI,0,-1));
+  return{A,ratio:1,belt,pulleys:[{K:A,w:18,ang:p=>-p,f:C['brass-fill']},{K:G1,w:12,ang:p=>-p*R/rg,f:C.part},{K:G2,w:12,ang:p=>p*R/rg,f:C.part},{K:B,w:18,ang:p=>p,f:C['steel-fill']}],
+    shafts:[[[0,-80,0],[0,60,0],6,C.part],[[0,yB,zB-60],[0,yB,zB+90],6,C.part],[[R-30,rg,zg],[R+30,rg,zg],4,C.part2],[[-R-30,rg,zg],[-R+30,rg,zg],4,C.part2]]};}});
+/* 243 · one horizontal shaft driving two upright shafts: both driven pulleys level with A's top; the second touches A's plane where the belt leaves for A */
+rightAngleBelt(243,{note:'ONE HORIZONTAL SHAFT DRIVES TWO UPRIGHT SHAFTS WITH ONE BELT',yaw:-0.45,pitch:0.5,cx:250,cy:300,geo:()=>{const R=70,r=55;
+  const A=circ3([0,0,0],[1,0,0],[0,0,1],R),B1=circ3([130,190,R],[1,0,0],[0,1,0],r),B2=circ3([300,r,R],[1,0,0],[0,1,0],r);
+  const top=A.at(PI/2);const t1=tanFromPoint(top,B1,-1);
+  const tl=tanLine({c:[B1.c[0],B1.c[1]],r,s:-1},{c:[B2.c[0],B2.c[1]],r,s:-1});
+  const a1=Math.atan2(tl.p1[1]-B1.c[1],tl.p1[0]-B1.c[0]),a2=Math.atan2(tl.p2[1]-B2.c[1],tl.p2[0]-B2.c[0]);
+  const tdep=-PI/2,Pd=B2.at(tdep),ta=tanFromPoint(Pd,A,-1);
+  const belt=pathPts([top],arc3(B1,t1,a1,-1),arc3(B2,a2,tdep,-1),arc3(A,ta,PI/2,-1)).concat([top]);
+  return{A,ratio:R/r,belt,pulleys:[{K:A,w:18,ang:p=>-p,f:C['brass-fill']},{K:B1,w:16,ang:p=>-p*R/r,f:C['steel-fill']},{K:B2,w:16,ang:p=>-p*R/r,f:C['steel-fill']}],
+    shafts:[[[0,-90,0],[0,60,0],6,C.part],[[130,190,R-120],[130,190,R+110],6,C.part],[[300,r,R-120],[300,r,R+110],6,C.part]]};}});
+
+/* ================= audit pass · shaded 3D canvas renderer (R3) and solid gears ================= */
+/* colour helpers */
+function rgbOf(c){c=(c||'#999').trim();if(c[0]==='#'){if(c.length===4)c='#'+c[1]+c[1]+c[2]+c[2]+c[3]+c[3];return[1,3,5].map(i=>parseInt(c.slice(i,i+2),16));}const m=c.match(/[\d.]+/g)||[150,150,150];return m.slice(0,3).map(Number);}
+function shade(c,k){const [r,g,b]=rgbOf(c);const f=v=>Math.max(0,Math.min(255,Math.round(v*k)));return`rgb(${f(r)},${f(g)},${f(b)})`;}
+/* R3: collects polygons in world space, culls back faces, sorts by depth and paints with simple lighting.
+   cam = {yaw,pitch,sc,cx,cy} (same convention as cam3). */
+function R3(cam){const P0=cam3(cam.yaw,cam.pitch,cam.sc||1,cam.cx,cam.cy),P=p=>{const q=P0(p);return[q[0],q[1],-q[2]];};/* cam3's third value grows toward the viewer; R3 wants depth */const cy_=Math.cos(cam.yaw),sy_=Math.sin(cam.yaw),cp=Math.cos(cam.pitch),sp=Math.sin(cam.pitch);
+  const view=[-sy_*cp,-cy_*cp,-sp];/* direction of increasing depth (away from viewer) */
+  const Lw=v3.norm([-0.35-0.6*cy_,0.6*sy_-0.5,0.9]);const faces=[],lines=[];
+  const R={P,view,
+    /* face: pts (3D), fill, opts {out: point the outward normal faces away from, edge: stroke, both: draw even if back-facing} */
+    face(pts,fill,o={}){if(pts.length<3)return;let n=[0,0,0];for(let i=0;i<pts.length;i++){const a=pts[i],b=pts[(i+1)%pts.length];n[0]+=(a[1]-b[1])*(a[2]+b[2]);n[1]+=(a[2]-b[2])*(a[0]+b[0]);n[2]+=(a[0]-b[0])*(a[1]+b[1]);}
+      const l=Math.hypot(...n);if(l<1e-9)return;n=n.map(v=>v/l);
+      if(v3.dot(n,view)>0)n=n.map(v=>-v);/* two-sided: light the side facing the viewer */
+      const sc=pts.map(P);let dep=0;for(const s of sc)dep+=s[2];dep/=sc.length;if(o.bias)dep+=o.bias;
+      const lam=Math.max(0,v3.dot(n,Lw));faces.push({sc,dep,fill,k:0.62+0.5*lam,edge:o.edge,lw:o.lw});},
+    line(a,b,col,w=1.2,bias=0){const A=P(a),B=P(b);lines.push({A,B,col,w,dep:(A[2]+B[2])/2+bias});},
+    /* loft between two loops with equal point counts (a = front, b = back); caps optional */
+    loft(a,b,fill,o={}){const n=a.length,ctr=a.concat(b).reduce((s,p)=>[s[0]+p[0],s[1]+p[1],s[2]+p[2]],[0,0,0]).map(v=>v/(2*n));const out=o.center||ctr;
+      for(let i=0;i<n;i++){const j=(i+1)%n;if(o.open&&j===0)break;R.face([a[i],a[j],b[j],b[i]],fill,{out:o.sideOut?o.sideOut(i):out});}
+      if(o.caps!==false){R.face(a,o.capFill||fill,{out:o.capOutA||out,edge:o.edge??true,bias:o.capBias||0});R.face(b.slice().reverse(),o.capFill||fill,{out:o.capOutB||out,edge:o.edge??true,bias:o.capBias||0});}},
+    draw(){if(GL3.ok()&&GL3.draw(faces,lines))return;faces.sort((p,q)=>q.dep-p.dep);const items=faces.concat(lines.map(l=>Object.assign(l,{isLine:1}))).sort((p,q)=>q.dep-p.dep);
+      for(const f of items){if(f.isLine){ctx.save();ctx.strokeStyle=f.col||C.ink;ctx.lineWidth=f.w;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(f.A[0],f.A[1]);ctx.lineTo(f.B[0],f.B[1]);ctx.stroke();ctx.restore();continue;}
+        ctx.beginPath();ctx.moveTo(f.sc[0][0],f.sc[0][1]);for(let i=1;i<f.sc.length;i++)ctx.lineTo(f.sc[i][0],f.sc[i][1]);ctx.closePath();const col=shade(f.fill,f.k);ctx.fillStyle=col;ctx.fill();
+        ctx.strokeStyle=f.edge?C.ink:col;ctx.lineWidth=f.edge?(f.lw||1):0.6;ctx.stroke();}}};
+  return R;}
+/* GL3: z-buffered WebGL back end for R3 (exact hidden surfaces, antialiased); falls back to the painter if WebGL is missing */
+const GL3=(()=>{let cv=null,gl=null,pr=null,bf=null,okv=null;
+  function init(){okv=false;try{cv=document.createElement('canvas');gl=cv.getContext('webgl',{antialias:true,alpha:true,premultipliedAlpha:false,preserveDrawingBuffer:true});if(!gl)return;
+    const sh=(t,src)=>{const o=gl.createShader(t);gl.shaderSource(o,src);gl.compileShader(o);return o;};pr=gl.createProgram();
+    gl.attachShader(pr,sh(gl.VERTEX_SHADER,'attribute vec3 p;attribute vec4 c;varying vec4 v;void main(){gl_Position=vec4(p,1.0);v=c;}'));
+    gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,'precision mediump float;varying vec4 v;void main(){gl_FragColor=v;}'));gl.linkProgram(pr);if(!gl.getProgramParameter(pr,gl.LINK_STATUS))return;bf=gl.createBuffer();okv=true;}catch(e){okv=false;}}
+  return{ok(){if(okv===null)init();return okv&&ctx&&ctx.canvas&&ctx.getTransform;},
+    draw(faces,lines){const T=ctx.getTransform(),Wd=ctx.canvas.width,Hd=ctx.canvas.height;if(!Wd||!Hd)return false;if(cv.width!==Wd)cv.width=Wd;if(cv.height!==Hd)cv.height=Hd;
+      let dmin=1e9,dmax=-1e9;for(const f of faces)for(const p of f.sc){if(p[2]<dmin)dmin=p[2];if(p[2]>dmax)dmax=p[2];}for(const l of lines){dmin=Math.min(dmin,l.A[2],l.B[2]);dmax=Math.max(dmax,l.A[2],l.B[2]);}
+      if(!(dmax>dmin)){dmax=dmin+1;}const pad=(dmax-dmin)*0.05+1;dmin-=pad;dmax+=pad;const sc=Math.hypot(T.a,T.b);
+      const X=p=>(T.a*p[0]+T.c*p[1]+T.e)/Wd*2-1,Y=p=>1-(T.b*p[0]+T.d*p[1]+T.f)/Hd*2,Z=(d,b)=>((d-dmin)/(dmax-dmin))*2-1-(b||0);
+      const out=[];const push=(x,y,z,c)=>{out.push(x,y,z,c[0],c[1],c[2],c[3]);};const ink=rgbOf(C.ink).map(v=>v/255).concat([1]);
+      for(const f of faces){const [r,g,b]=rgbOf(f.fill),k=f.k;const c=[Math.min(1,r*k/255),Math.min(1,g*k/255),Math.min(1,b*k/255),1];const n=f.sc.length;let cx=0,cy=0,cz=0;for(const p of f.sc){cx+=p[0];cy+=p[1];cz+=p[2];}const ctr=[cx/n,cy/n,cz/n];
+        for(let i=0;i<n;i++){const a=f.sc[i],q=f.sc[(i+1)%n];push(X(ctr),Y(ctr),Z(ctr[2]),c);push(X(a),Y(a),Z(a[2]),c);push(X(q),Y(q),Z(q[2]),c);}}
+      const seg=(A,B,w,col,bias)=>{const ax=T.a*A[0]+T.c*A[1]+T.e,ay=T.b*A[0]+T.d*A[1]+T.f,bx=T.a*B[0]+T.c*B[1]+T.e,by=T.b*B[0]+T.d*B[1]+T.f;const L=Math.hypot(bx-ax,by-ay)||1e-6,hw=Math.max(0.5,w*sc/2);const nx=-(by-ay)/L*hw,ny=(bx-ax)/L*hw;
+        const P=(x,y,d)=>[x/Wd*2-1,1-y/Hd*2,Z(d,bias)];const v=[P(ax+nx,ay+ny,A[2]),P(ax-nx,ay-ny,A[2]),P(bx-nx,by-ny,B[2]),P(bx+nx,by+ny,B[2])];
+        for(const i of [0,1,2,0,2,3])push(v[i][0],v[i][1],v[i][2],col);};
+      for(const f of faces)if(f.edge){const n=f.sc.length;for(let i=0;i<n;i++)seg(f.sc[i],f.sc[(i+1)%n],(f.lw||1)*0.8,ink,0.004);}
+      for(const l of lines){const c=rgbOf(l.col||C.ink).map(v=>v/255).concat([1]);seg(l.A,l.B,l.w,c,0.006);}
+      const data=new Float32Array(out);gl.viewport(0,0,Wd,Hd);gl.clearColor(0,0,0,0);gl.clearDepth(1);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+      gl.useProgram(pr);gl.bindBuffer(gl.ARRAY_BUFFER,bf);gl.bufferData(gl.ARRAY_BUFFER,data,gl.STREAM_DRAW);const ap=gl.getAttribLocation(pr,'p'),ac=gl.getAttribLocation(pr,'c');
+      gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,28,0);gl.enableVertexAttribArray(ac);gl.vertexAttribPointer(ac,4,gl.FLOAT,false,28,12);gl.drawArrays(gl.TRIANGLES,0,data.length/7);
+      ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(cv,0,0);ctx.restore();return true;}};})();
+/* frame helpers: map local (x,y,z) with axes u,v,n at origin c */
+function fr3(c,u,v){const n=v3.cross(u,v);return{c,u,v,n,at(x,y,z=0){return[c[0]+u[0]*x+v[0]*y+n[0]*z,c[1]+u[1]*x+v[1]*y+n[1]*z,c[2]+u[2]*x+v[2]*y+n[2]*z];}};}
+function rot2(p,a){const c=Math.cos(a),s=Math.sin(a);return[p[0]*c-p[1]*s,p[0]*s+p[1]*c];}
+/* involute outline at origin, angle a (uses the kit's gearPts) */
+const gearOutline2=(R,Z,a)=>gearPts(0,0,R,Z,a,false);
+/* solid spur / helical gear: F frame (gear plane u,v; axis n), width w, twist = helix twist across the face (rad) */
+function gear3(R,F,Rp,Z,w,a,fill,o={}){const tw=o.twist||0,seg=o.seg||(tw?4:1),bore=o.bore??Math.max(4,Rp*0.14);
+  const loops=[];for(let k=0;k<=seg;k++){const t=k/seg,z=-w/2+w*t;const ang=a+(o.herring?(t<0.5?t:1-t)*2*tw/2:(t-0.5)*tw);loops.push(gearOutline2(Rp,Z,ang).map(p=>F.at(p[0],p[1],z)));}
+  for(let k=0;k<seg;k++)R.loft(loops[k],loops[k+1],fill,{caps:false,center:F.c,sideOut:i=>F.c});
+  /* caps with hub and bore */const cap=(z,fl)=>{const pts=loops[z<0?0:seg];R.face(z<0?pts.slice().reverse():pts,fill,{out:F.at(0,0,-z*5),edge:true});
+    const hub=[],hb=[];for(let i=0;i<24;i++){const t=i/24*TAU;hub.push(F.at(bore*Math.cos(t),bore*Math.sin(t),z*1.001));}R.face(hub,C.part,{out:F.at(0,0,-z*5),edge:true,bias:-0.5});
+    if(o.mark!==false){const m1=F.at((bore+3)*Math.cos(a+(z>0?tw/2:-tw/2)),(bore+3)*Math.sin(a+(z>0?tw/2:-tw/2)),z*1.002),m2=F.at((Rp-2.2*Rp/Z*1.6)*Math.cos(a+(z>0?tw/2:-tw/2)),(Rp-2.2*Rp/Z*1.6)*Math.sin(a+(z>0?tw/2:-tw/2)),z*1.002);R.line(m1,m2,C.ink,1.2,-0.6);}};
+  cap(-w/2);cap(w/2);}
+/* bevel gear: apex A, axis n (pointing from apex to the gear), u in the gear plane; outer pitch radius Rp, cone half-angle d, face width f (along the cone) */
+function bevel3(R,A,n,u,Rp,Z,d,f,a,fill,o={}){n=v3.norm(n);u=v3.norm(v3.sub(u,v3.mul(n,v3.dot(u,n))));const v=v3.cross(n,u);
+  const L=Rp/Math.sin(d),k=(L-f)/L;let outer=gearOutline2(Rp,Z,a);if(o.seg){const rr=Rp-1.25*2*Rp/Z;outer=outer.map(p=>{const t=mod(Math.atan2(p[1],p[0])-a-o.seg[0],TAU);if(t<o.seg[1])return p;const r=Math.min(Math.hypot(p[0],p[1]),rr);const q=Math.atan2(p[1],p[0]);return[r*Math.cos(q),r*Math.sin(q)];});}const zO=L*Math.cos(d),zI=(L-f)*Math.cos(d);
+  /* teeth stand on the pitch cone: scale radially about the cone, and tilt the tooth height along the back cone */
+  const lay=(p,s,z)=>{const r=Math.hypot(p[0],p[1]),dr=(r-Rp)*s,rr=Rp*s+dr*Math.cos(d),zz=z-dr*Math.sin(d);const t=Math.atan2(p[1],p[0]);return v3.add(A,v3.add(v3.mul(n,zz),v3.add(v3.mul(u,rr*Math.cos(t)),v3.mul(v,rr*Math.sin(t)))));};
+  const lo=outer.map(p=>lay(p,1,zO)),li=outer.map(p=>lay(p,k,zI));const ctr=v3.add(A,v3.mul(n,(zO+zI)/2));
+  R.loft(lo,li,fill,{caps:false,center:ctr,sideOut:()=>v3.add(A,v3.mul(n,zO*0.5))});
+  R.face(lo,fill,{out:A,edge:true});R.face(li.slice().reverse(),fill,{out:v3.add(A,v3.mul(n,zO*3)),edge:true});
+  /* back boss */const hub=[],hub2=[],rb=Rp*0.42;for(let i=0;i<24;i++){const t=i/24*TAU;hub.push(v3.add(A,v3.add(v3.mul(n,zO+0.5),v3.add(v3.mul(u,rb*Math.cos(t)),v3.mul(v,rb*Math.sin(t))))));hub2.push(v3.add(A,v3.add(v3.mul(n,zO+(o.boss??14)),v3.add(v3.mul(u,rb*0.8*Math.cos(t)),v3.mul(v,rb*0.8*Math.sin(t))))));}
+  R.loft(hub,hub2,fill,{center:v3.add(A,v3.mul(n,zO+7))});
+  const m1=lay([Rp*0.55*Math.cos(a),Rp*0.55*Math.sin(a)],1,zO-0.1),m2=lay([(Rp-2*Rp/Z*1.4)*Math.cos(a),(Rp-2*Rp/Z*1.4)*Math.sin(a)],1,zO-0.1);R.line(m1,m2,C.ink,1.2,-0.4);}
+/* round bar (shaft) from a to b */
+function rod3(R,a,b,r,fill,o={}){const ax=v3.norm(v3.sub(b,a));let u=Math.abs(ax[2])<0.9?v3.norm(v3.cross(ax,[0,0,1])):[1,0,0];const v=v3.cross(ax,u);const N=o.n||16;
+  const ring=c=>{const o2=[];for(let i=0;i<N;i++){const t=i/N*TAU;o2.push(v3.add(c,v3.add(v3.mul(u,r*Math.cos(t)),v3.mul(v,r*Math.sin(t)))));}return o2;};R.loft(ring(a),ring(b),fill||C.part,{center:v3.mul(v3.add(a,b),0.5),edge:false});}
+/* box between two points along an axis, cross-section w x h oriented by up vector */
+function block3(R,c,ax,up,L,w,h,fill){ax=v3.norm(ax);up=v3.norm(v3.sub(up,v3.mul(ax,v3.dot(up,ax))));const sd=v3.cross(ax,up);const q=(x,y,z)=>v3.add(c,v3.add(v3.mul(ax,x),v3.add(v3.mul(sd,y),v3.mul(up,z))));
+  const a=[q(-L/2,-w/2,-h/2),q(-L/2,w/2,-h/2),q(-L/2,w/2,h/2),q(-L/2,-w/2,h/2)],b=[q(L/2,-w/2,-h/2),q(L/2,w/2,-h/2),q(L/2,w/2,h/2),q(L/2,-w/2,h/2)];R.loft(a,b,fill,{center:c,edge:true});}
+/* extruded 2D shape in frame F from z0 to z1 */
+function prism3(R,F,pts2,z0,z1,fill,o={}){R.loft(pts2.map(p=>F.at(p[0],p[1],z1)),pts2.map(p=>F.at(p[0],p[1],z0)),fill,Object.assign({center:F.at(0,0,(z0+z1)/2)},o));}
+function ringPts(r,n=40,a0=0){const o=[];for(let i=0;i<n;i++){const t=a0+i/n*TAU;o.push([r*Math.cos(t),r*Math.sin(t)]);}return o;}
+
+/* ================= audit pass · gears drawn as shaded solids (25, 26, 29, 40–44, 50) ================= */
+const CAMG={yaw:-0.62,pitch:0.42,sc:1,cx:400,cy:270};
+function solidSim(num,o){return reg(Object.assign({num,params:o.params||[],outLabel:o.outLabel||'Driven gear, turns',
+  update(phi){this.g={phi};},output(){return o.out(this.g.phi,this.P);},
+  draw(){const R=R3(Object.assign({},CAMG,o.cam||{}));o.scene(R,this.g.phi,this.P,this);R.draw();if(o.note)label(o.note,400,505,'center');if(o.labels)o.labels(R.P,this.g.phi,this.P);}},o.extra||{}));}
+/* 25 bevel gears for shafts at right angles */
+solidSim(25,{note:'BEVEL GEARS · the pitch cones share one apex where the shafts meet',params:[{id:'z',label:'Driven teeth',min:16,max:40,step:4,value:28,fmt:v=>`${v} (driver 20)`}],
+  out:(phi,P)=>-phi*20/P.z/TAU,cam:{cx:380,cy:250,yaw:-0.7,pitch:0.45},
+  scene(R,phi,P){const Z1=20,Z2=P.z,m=6,R1=m*Z1/2,R2=m*Z2/2,d1=Math.atan2(Z1,Z2),d2=PI/2-d1,O=[0,0,0];
+    bevel3(R,O,[0,0,-1],[1,0,0],R1,Z1,d1,26,phi,C['brass-fill']);bevel3(R,O,[1,0,0],[0,0,-1],R2,Z2,d2,26,-phi*Z1/Z2+PI/Z2,C['steel-fill']);
+    const L1=R1/Math.tan(d1),L2=R2/Math.tan(d2);rod3(R,[0,0,-L1-10],[0,0,-L1-170],7,C.part);rod3(R,[L2+10,0,0],[L2+190,0,0],7,C.part);},
+  labels(P){const a=P([0,0,-200]),b=P([300,0,0]);label('DRIVER',a[0]+14,a[1]);label('DRIVEN',b[0]-30,b[1]+22);},
+  extra:{reads(v){return[['Ratio',`20 : ${this.P.z}`],['Shaft angle','90°'],['Driven',rpmOf(Math.abs(v))]];}}});
+/* 26 crown wheel and pinion */
+solidSim(26,{note:'CROWN WHEEL · teeth stand on the face of the wheel; the spur pinion meshes with them at the rim',outLabel:'Crown wheel, turns',
+  out:phi=>phi*12/48/TAU,cam:{cx:400,cy:300,yaw:-0.5,pitch:0.55},
+  scene(R,phi){const Zc=48,Zp=12,Rc=150,m=2*PI*Rc/Zc/PI,Rp=m*Zp/2,ac=phi*Zp/Zc,H=18,th=14;
+    const F=fr3([0,0,0],[1,0,0],[0,1,0]);prism3(R,F,ringPts(Rc+22,64),-10,0,C['steel-fill'],{edge:false});prism3(R,F,ringPts(Rc-26,48),-10,0.5,C['steel-fill'],{caps:true});
+    for(let k=0;k<Zc;k++){const t=ac+k*TAU/Zc,hw=PI*m/4;/* trapezoid tooth, radial prism */const c=Math.cos(t),s=Math.sin(t),tx=[-s,c,0],rad=[c,s,0];
+      const q=(r,x,z)=>[rad[0]*r+tx[0]*x,rad[1]*r+tx[1]*x,z];const prof=[[-hw-0.364*H*0.5,0],[hw+0.364*H*0.5,0],[hw-0.364*H*0.5,H],[-hw+0.364*H*0.5,H]];
+      R.loft(prof.map(p=>q(Rc-22,p[0],p[1])),prof.map(p=>q(Rc+20,p[0],p[1])),C['steel-fill'],{edge:false});}
+    const Fp=fr3([Rc,0,H/2+Rp],[0,0,-1],[0,1,0]);gear3(R,Fp,Rp,Zp,th*2,phi+PI/Zp,C['brass-fill']);rod3(R,[Rc-th-6,0,H/2+Rp],[Rc-th-200,0,H/2+Rp],6,C.part);rod3(R,[0,0,-12],[0,0,-140],8,C.part);},
+  extra:{reads(v){return[['Ratio','12 : 48'],['Shafts','at right angles'],['Crown wheel',rpmOf(Math.abs(v))]];}}});
+/* 29 spiral (scroll) on a disk face driving a spur wheel one tooth per turn */
+solidSim(29,{note:'SPIRAL ON THE DISK FACE · each turn of the disk pushes the wheel on by one tooth',outLabel:'Wheel, turns',
+  out:phi=>phi/18/TAU,cam:{cx:380,cy:300,yaw:-0.45,pitch:0.62},
+  scene(R,phi){const Zw=18,p=26,Rw=p*Zw/(2*PI),r0=40,turns=5,Rd=r0+p*turns+14,rc=r0+p*3.5;
+    const F=fr3([0,0,0],[1,0,0],[0,1,0]);prism3(R,F,ringPts(Rd,72),-16,0,C['brass-fill']);
+    /* raised spiral thread, drawn as short ribbon faces */const N=turns*70,hw=p*0.24,h=9;
+    for(let i=0;i<N;i++){const s0=i/N*turns*TAU,s1=(i+1)/N*turns*TAU,P0=s=>{const r=r0+p*s/TAU,t=s+phi;return[r,t];};
+      const [ra,ta]=P0(s0),[rb,tb]=P0(s1);const pt=(r,t,z)=>[r*Math.cos(t),r*Math.sin(t),z];
+      R.face([pt(ra-hw,ta,h),pt(ra+hw,ta,h),pt(rb+hw,tb,h),pt(rb-hw,tb,h)],C['brass-fill'],{edge:false});R.face([pt(ra+hw,ta,0),pt(rb+hw,tb,0),pt(rb+hw,tb,h),pt(ra+hw,ta,h)],shade(C['brass-fill'],0.85),{});R.face([pt(ra-hw,ta,0),pt(rb-hw,tb,0),pt(rb-hw,tb,h),pt(ra-hw,ta,h)],shade(C['brass-fill'],0.85),{});}
+    const Fw=fr3([rc,0,h*0.5+Rw],[0,0,-1],[-1,0,0]);gear3(R,Fw,Rw,Zw,16,phi/Zw,C['steel-fill']);rod3(R,[rc,9,h*0.5+Rw],[rc,170,h*0.5+Rw],6,C.part);rod3(R,[0,0,-16],[0,0,-150],8,C.part);},
+  extra:{reads(v){return[['Ratio','18 : 1 (one tooth per turn)'],['Shafts','at right angles'],['Wheel',rpmOf(Math.abs(v))]];}}});
+/* 40 oblique (helical) teeth, 41 V-shaped (herringbone) teeth */
+function helicalPair(num,herring,note){solidSim(num,{note,cam:{cx:400,cy:260,yaw:-0.35,pitch:0.62},out:phi=>-phi*16/24/TAU,
+  scene(R,phi){const m=7,Z1=16,Z2=24,R1=m*Z1/2,R2=m*Z2/2,w=46,beta=0.45,t1=w*Math.tan(beta)/R1,t2=w*Math.tan(beta)/R2;
+    const F1=fr3([-R2*0.6,0,0],[1,0,0],[0,1,0]),F2=fr3([-R2*0.6+R1+R2,0,0],[1,0,0],[0,1,0]);
+    gear3(R,F1,R1,Z1,w,phi,C['brass-fill'],{twist:herring?t1:t1,herring,seg:herring?6:5});gear3(R,F2,R2,Z2,w,-phi*Z1/Z2+PI+PI/Z2,C['steel-fill'],{twist:herring?-t2:-t2,herring,seg:herring?6:5});
+    rod3(R,F1.at(0,0,w/2),F1.at(0,0,w/2+70),6,C.part);rod3(R,F2.at(0,0,w/2),F2.at(0,0,w/2+70),7,C.part);},
+  extra:{reads(v){return[['Ratio','16 : 24'],['Teeth',herring?'V-shaped (herringbone): the side thrusts cancel':'oblique (helical): several teeth always in contact'],['Driven',rpmOf(Math.abs(v))]];}}});}
+helicalPair(40,false,'OBLIQUE TEETH · each tooth comes into contact gradually, so the drive runs smoothly');
+helicalPair(41,true,'V-SHAPED TEETH · smooth like oblique teeth, with no end thrust on the shafts');
+/* 42 bevel gears for shafts at an oblique angle */
+solidSim(42,{note:'ANGLE BEVELS · shafts meet at 60°; the pitch cones still share one apex',cam:{cx:360,cy:230,yaw:-0.75,pitch:0.4},out:phi=>-phi*18/27/TAU,
+  scene(R,phi){const Z1=18,Z2=27,m=6,R1=m*Z1/2,R2=m*Z2/2,S=PI/3,d1=Math.atan2(Math.sin(S),Z2/Z1+Math.cos(S)),d2=S-d1;
+    const n1=[0,0,-1],n2=[Math.sin(S),0,-Math.cos(S)];const c1=v3.norm(v3.add(n1,n2));
+    bevel3(R,[0,0,0],n1,[1,0,0],R1,Z1,d1,24,phi,C['brass-fill']);bevel3(R,[0,0,0],n2,[-Math.cos(S),0,-Math.sin(S)].map(v=>-v),R2,Z2,d2,24,-phi*Z1/Z2+PI/Z2,C['steel-fill']);
+    const L1=R1/Math.tan(d1),L2=R2/Math.tan(d2);rod3(R,v3.mul(n1,L1+12),v3.mul(n1,L1+160),7,C.part);rod3(R,v3.mul(n2,L2+12),v3.mul(n2,L2+170),7,C.part);},
+  extra:{reads(v){return[['Shaft angle','60°'],['Ratio','18 : 27'],['Driven',rpmOf(Math.abs(v))]];}}});
+/* 43 skew (crossed oblique-toothed) gears for shafts that do not meet */
+solidSim(43,{note:'SKEW GEARS · oblique teeth let gears drive between shafts that cross without meeting',cam:{cx:400,cy:270,yaw:-0.55,pitch:0.5},out:phi=>-phi*14/20/TAU,
+  scene(R,phi){const m=7,Z1=14,Z2=20,R1=m*Z1/2/Math.cos(PI/4),R2=m*Z2/2/Math.cos(PI/4),w=34;
+    const F1=fr3([0,0,0],[1,0,0],[0,1,0]),F2=fr3([0,R1+R2,0],[0,0,1],[0,1,0]);/* second axis along x */
+    gear3(R,F1,R1,Z1,w,phi,C['brass-fill'],{twist:w/R1,seg:5});gear3(R,F2,R2,Z2,w,-phi*Z1/Z2+PI/Z2,C['steel-fill'],{twist:w/R2,seg:5});
+    rod3(R,F1.at(0,0,w/2),F1.at(0,0,w/2+80),6,C.part);rod3(R,F1.at(0,0,-w/2),F1.at(0,0,-w/2-60),6,C.part);rod3(R,F2.at(0,0,w/2),F2.at(0,0,w/2+90),7,C.part);rod3(R,F2.at(0,0,-w/2),F2.at(0,0,-w/2-90),7,C.part);},
+  extra:{reads(v){return[['Shafts','at right angles, not meeting'],['Teeth','set at 45° on both gears'],['Driven',rpmOf(Math.abs(v))]];}}});
+/* 44 stepped gears: several thin gears side by side, each set on by part of a tooth */
+solidSim(44,{note:'STEPPED GEARS · three layers each set on by a third of a tooth: always one tooth at its best contact',cam:{cx:400,cy:260,yaw:-0.3,pitch:0.6},out:phi=>-phi*16/24/TAU,
+  scene(R,phi){const m=7,Z1=16,Z2=24,R1=m*Z1/2,R2=m*Z2/2,w=14,n=3;for(let k=0;k<n;k++){const z=(k-(n-1)/2)*w;
+      gear3(R,fr3([-R2*0.6,0,z],[1,0,0],[0,1,0]),R1,Z1,w,phi+k*TAU/Z1/n,C['brass-fill'],{mark:k===n-1});gear3(R,fr3([-R2*0.6+R1+R2,0,z],[1,0,0],[0,1,0]),R2,Z2,w,-(phi+k*TAU/Z1/n)*Z1/Z2+PI+PI/Z2,C['steel-fill'],{mark:k===n-1});}
+    rod3(R,[-R2*0.6,0,n*w/2],[-R2*0.6,0,n*w/2+60],6,C.part);rod3(R,[-R2*0.6+R1+R2,0,n*w/2],[-R2*0.6+R1+R2,0,n*w/2+60],7,C.part);},
+  extra:{reads(v){return[['Layers','3, each set on by ⅓ tooth'],['Ratio','16 : 24'],['Driven',rpmOf(Math.abs(v))]];}}});
+/* 50 universal (Hooke's) joint */
+reg({num:50,outLabel:'Output angle − input angle, °',params:[{id:'b',label:'Shaft angle',min:0,max:45,step:5,value:30,fmt:v=>v+'°'}],
+  update(phi){const b=this.P.b*PI/180;const a1=phi;/* output angle from the cross geometry */const a2=Math.atan2(Math.sin(a1),Math.cos(a1)*Math.cos(b));const k=Math.round((a1-a2)/TAU);this.g={phi,b,a1,a2:a2+k*TAU};},
+  output(){return(this.g.a2-this.g.a1)*180/PI;},
+  draw(){const g=this.g,R=R3({yaw:-0.5,pitch:0.32,sc:1,cx:400,cy:270});const ax1=[1,0,0],ax2=[Math.cos(g.b),Math.sin(g.b),0];
+    /* input yoke pin axis e1 ⟂ x, turning with a1; cross arm e2 ⟂ e1 and ⟂ output axis */
+    const e1=[0,Math.cos(g.a1),Math.sin(g.a1)],e2=v3.norm(v3.cross(ax2,e1));const Rk=46,arm=40;
+    rod3(R,[-300,0,0],[-70,0,0],11,C['brass-fill']);rod3(R,v3.mul(ax2,70),v3.mul(ax2,300),11,C['steel-fill']);
+    const yoke=(ax,e,fill,sgn)=>{block3(R,v3.mul(ax,sgn*62),e,ax,Rk*2+22,24,16,fill);
+      for(const s of [1,-1]){const c=v3.add(v3.mul(e,s*Rk),v3.mul(ax,sgn*30));block3(R,c,ax,e,64,22,12,fill);}};
+    yoke(ax1,e1,C['brass-fill'],-1);yoke(ax2,e2,C['steel-fill'],1);
+    rod3(R,v3.mul(e1,-arm-6),v3.mul(e1,arm+6),7,C.part2);rod3(R,v3.mul(e2,-arm-6),v3.mul(e2,arm+6),7,C.part2);block3(R,[0,0,0],e1,e2,20,20,20,C.part2);
+    /* marks on the shafts so the uneven speed shows */R.line(v3.add([-200,0,0],v3.mul(e1,11)),v3.add([-120,0,0],v3.mul(e1,11)),C.ink,2.2,-20);R.line(v3.add(v3.mul(ax2,140),v3.mul(e2,11)),v3.add(v3.mul(ax2,220),v3.mul(e2,11)),C.ink,2.2,-20);
+    R.draw();label('INPUT · steady',150,430);label('OUTPUT · speeds up and slows down twice a turn',470,470);},
+  reads(v){const g=this.g,c=Math.cos(g.b),s=Math.sin(g.a1);const k=c/(1-s*s*(1-c*c));return[['Shaft angle',`${this.P.b}°`],['Output speed now',`${k.toFixed(3)} × input`],['Range',`${c.toFixed(3)} – ${(1/c).toFixed(3)} × input`],['Lead / lag',`${((g.a2-g.a1)*180/PI).toFixed(1)}°`]];}});
+
+/* ================= audit pass · non-circular toothed gears (30, 33, 35, 38, 209) and fixes 25–50 ================= */
+/* closed pitch curve from a local polar radius rf(s); arc-length table so teeth are spaced evenly along the curve */
+const _ptc={};
+function pitchCurve(rf,key,Z){if(key&&_ptc[key])return _ptc[key];const M=2400,P=[],A=[0];for(let i=0;i<M;i++){const s=i/M*TAU,r=rf(s);P.push([r*Math.cos(s),r*Math.sin(s)]);}
+  for(let i=1;i<=M;i++){const a=P[i-1],b=P[i%M];A.push(A[i-1]+Math.hypot(b[0]-a[0],b[1]-a[1]));}
+  const L=A[M],res={P,A,L,M,Z,p:L/Z,
+    arcAt(s){const x=mod(s,TAU)/TAU*M,i=Math.floor(x);return A[i]+(A[i+1]-A[i])*(x-i);},
+    at(a){a=mod(a,L);let lo=0,hi=M;while(hi-lo>1){const m=(lo+hi)>>1;if(A[m]<=a)lo=m;else hi=m;}const f=(a-A[lo])/((A[lo+1]-A[lo])||1),p0=P[lo],p1=P[(lo+1)%M];return[p0[0]+(p1[0]-p0[0])*f,p0[1]+(p1[1]-p0[1])*f,p1[0]-p0[0],p1[1]-p0[1]];}};
+  if(key)_ptc[key]=res;return res;}
+/* toothed outline (local): tooth centres at arc = phase + k·p */
+function toothedCurve(pc,phase,o={}){const n=o.per||20,N=pc.Z*n,m=pc.p/PI,ad=m*(o.add??1),de=-m*(o.ded??1.2),out=[];
+  for(let i=0;i<N;i++){const q=pc.at(phase+i/N*pc.L),tl=Math.hypot(q[2],q[3])||1,u=Math.abs(mod(i/n+0.5,1)-0.5);
+    const h=u<0.15?ad:u>0.35?de:ad+(de-ad)*(u-0.15)/0.2;out.push([q[0]+q[3]/tl*h,q[1]-q[2]/tl*h]);}return out;}
+/* draw a toothed non-circular gear turned by th (world = local + th) */
+function ncGear(cx,cy,pc,phase,th,fill,o={}){const c=Math.cos(th),s=Math.sin(th),tr=([x,y])=>[cx+x*c-y*s,cy+x*s+y*c];
+  poly(toothedCurve(pc,phase,o).map(tr));ctx.closePath();circ(cx,cy,o.bore||7,false);paint(fill,C.ink,1.1);
+  ctx.save();ctx.setLineDash([3,4]);ctx.strokeStyle=C.muted;ctx.lineWidth=0.8;poly(pc.P.filter((_,i)=>i%8===0).map(tr));ctx.closePath();ctx.stroke();ctx.restore();
+  if(o.mark!==false){const q=tr([pc.P[0][0]*0.55,pc.P[0][1]*0.55]);bar(cx,cy,q[0],q[1],5,C.part2);}pivot(cx,cy,5);}
+/* gear pair helper: phases so a tooth of A meets a space of B at the contact point.
+   sA, sB = local angles of the contact point on A and B at the reference pose */
+function ncPhase(pcA,pcB,sA,sB){return pcA.arcAt(sA)+pcB.arcAt(sB)-pcB.p/2;}
+
+/* 33 · two equal elliptical gears turning about their foci; foci 2a apart, so r1 + r2 = 2a at the contact point */
+Object.assign(SIMS_NEW[33],{draw(){const g=this.g,e=this.P.e,a=this.a,rf=s=>a*(1-e*e)/(1+e*Math.cos(s));const pc=pitchCurve(rf,'e33_'+e,31);
+  const F1=[310,262],F2=[310+2*a,262];ncGear(F1[0],F1[1],pc,0,g.phi,C['brass-fill']);ncGear(F2[0],F2[1],pc,ncPhase(pc,pc,0,PI),g.a2,C['steel-fill']);
+  label('ELLIPTICAL GEARS · each turns about a focus; the foci are one major axis apart',400,470,'center');}});
+/* 36 · Brown: a single row of teeth; the pinion works outside the row one way and inside it the other way, its shaft rising and falling in a slot */
+{const m=SIMS_NEW[36];}
+/* 45 · grooved friction gearing: add the enlarged cross-section Brown shows */
+{const m=SIMS_NEW[45],d0=m.draw;m.draw=function(){d0.call(this);const x0=575,y0=330,w=170,n=5,pw=w/n,ym=y0+55,h=14;ctx.save();ctx.fillStyle=C.sheet;ctx.strokeStyle=C.muted;ctx.lineWidth=1;ctx.beginPath();ctx.rect(x0-10,y0,w+20,112);ctx.fill();ctx.stroke();ctx.restore();
+  const zig=(sgn)=>{const pts=[];for(let k=0;k<=n;k++){const xa=x0+k*pw;pts.push([xa,ym+sgn*h/2]);if(k<n)pts.push([xa+pw/2,ym-sgn*h/2]);}return pts;};
+  const lo=zig(1),up=zig(1).map(p=>[p[0],p[1]-2]);poly([...lo,[x0+w,y0+92],[x0,y0+92]]);ctx.closePath();paint(C['brass-fill'],C.ink,1);poly([...up,[x0+w,y0+14],[x0,y0+14]]);ctx.closePath();paint(C['steel-fill'],C.ink,1);
+  label('SECTION · V ridges wedge into V grooves',x0+w/2,y0+106,'center');};}
+/* 49 · Brown: a horizontal shaft rocked to and fro carries two loose bevel wheels, each with a pawl on an opposed ratchet fast on the shaft; both mesh one bevel on the vertical shaft, which turns continuously */
+reg({num:49,outLabel:'Vertical shaft, turns',
+  reset(){this.w=0;this.last=null;},
+  update(phi){const a=0.55*Math.sin(phi);if(this.last===null)this.last=a;const d=a-this.last;this.last=a;this.w+=Math.abs(d);this.g={phi,a,d,w:this.w};},
+  output(){return this.w/TAU;},
+  draw(){const g=this.g,R=R3({yaw:-0.42,pitch:0.42,sc:1.05,cx:400,cy:255}),Z=20,Rp=60,dd=PI/4,bL=g.w,bR=-g.w;
+    rod3(R,[-260,0,0],[260,0,0],8,C.part);
+    bevel3(R,[0,0,0],[-1,0,0],[0,0,1],Rp,Z,dd,30,bL,C['steel-fill'],{boss:12});bevel3(R,[0,0,0],[1,0,0],[0,0,1],Rp,Z,dd,30,bR+PI/Z,C['steel-fill'],{boss:12});
+    bevel3(R,[0,0,0],[0,0,1],[1,0,0],Rp,Z,dd,30,-g.w+PI/Z,C['brass-fill'],{boss:10});rod3(R,[0,0,72],[0,0,210],8,C.part);
+    const saw=(sgn)=>{const pts=[];const n=14;for(let k=0;k<n;k++){const t0=k*TAU/n,t1=(k+1)*TAU/n;pts.push([46*Math.cos(t0),46*Math.sin(t0)],[56*Math.cos(t1-0.02),56*Math.sin(t1-0.02)]);}return sgn>0?pts:pts.map(p=>[p[0],-p[1]]).reverse();};
+    for(const s of [-1,1]){const x=s*90;const F=fr3([x,0,0],[0,Math.cos(g.a),Math.sin(g.a)],[0,-Math.sin(g.a),Math.cos(g.a)]);prism3(R,F,saw(s),-6,6,C['brass-fill'],{edge:true});
+      const b=s<0?bL:bR+PI/Z,pd=[0,Math.cos(b+0.6),Math.sin(b+0.6)];block3(R,v3.add([s*76,0,0],v3.mul(pd,52)),[0,-pd[2],pd[1]],[1,0,0],22,8,8,C.part2);}
+    const hand=[-250,0,0],ha=g.a;block3(R,v3.add(hand,[0,-Math.sin(ha)*50,Math.cos(ha)*50]),[0,-Math.sin(ha),Math.cos(ha)],[1,0,0],100,14,10,C['brass-fill']);
+    R.draw();label('ROCKED TO AND FRO',95,135);label('VERTICAL SHAFT · turns one way, both strokes',470,60);label('TWO LOOSE BEVELS, OPPOSED RATCHETS',400,480,'center');},
+  reads(){const g=this.g;return[['Input','rocks to and fro'],['Driving now',g.d>0?'left bevel (its pawl grips)':g.d<0?'right bevel (its pawl grips)':'—'],['Vertical shaft',`${(this.w/TAU).toFixed(2)} turns, one way`]];}});
+/* 37 · Brown: a bevel pinion whose teeth run the whole width of its face drives studs set spirally on the wheel; the pinion stays put, the studs meet it at a changing radius */
+Object.assign(SIMS_NEW[37],{draw(){const g=this.g,O=[330,265];circ(O[0],O[1],185);paint(C['brass-fill'],C.ink);
+  for(let i=0;i<=60;i++){const m=i/60*TAU,r=this.r(m),t=m+this.w;circ(O[0]+r*Math.cos(t),O[1]+r*Math.sin(t),5);paint(C.part,C.ink,1);}pivot(O[0],O[1],6);
+  const x0=O[0]+50,x1=O[0]+180;ctx.beginPath();ctx.rect(x0,O[1]-16,x1-x0,32);paint(C['steel-fill'],C.ink);ctx.save();ctx.beginPath();ctx.rect(x0,O[1]-16,x1-x0,32);ctx.clip();ctx.strokeStyle=C.ink;ctx.lineWidth=1;
+  for(let k=0;k<10;k++){const a=-g.phi+k*TAU/10,s=Math.sin(a);if(Math.cos(a)<0)continue;ctx.beginPath();ctx.moveTo(x0,O[1]+16*s);ctx.lineTo(x1,O[1]+16*s);ctx.stroke();}ctx.restore();
+  bar(x1,O[1],760,O[1],10,C.part);circ(O[0]+g.r,O[1],8);paint(null,C.hi,2.2);label('LONG-TOOTHED PINION · stays put; the studs meet it nearer or farther out',400,480,'center');}});
+/* 46 · elevation with both axes upright: the chain leaves the fusee at a small radius while the spring is strong and at a large radius as it weakens */
+Object.assign(SIMS_NEW[46],{draw(){const g=this.g,B=[230,265],Rb=72,F=[560,265],y0=150,y1=380,rt=22,rb=70,yc=y0+(y1-y0)*g.p,rc=rt+(rb-rt)*g.p;
+  ctx.beginPath();ctx.rect(B[0]-Rb,B[1]-60,2*Rb,120);paint(C['brass-fill'],C.ink);ctx.beginPath();ctx.rect(B[0]-Rb-6,B[1]-66,2*Rb+12,8);ctx.rect(B[0]-Rb-6,B[1]+58,2*Rb+12,8);paint(C.part,C.ink);
+  const nb=Math.round(g.p*10);ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=2;for(let k=0;k<nb;k++){const y=B[1]-52+k*10.5;ctx.beginPath();ctx.moveTo(B[0]-Rb,y);ctx.lineTo(B[0]+Rb,y+3);ctx.stroke();}ctx.restore();
+  bar(B[0],B[1]-110,B[0],B[1]+110,10,C.part);
+  poly([[F[0]-rt,y0],[F[0]+rt,y0],[F[0]+rb,y1],[F[0]-rb,y1]]);ctx.closePath();paint(C['steel-fill'],C.ink);
+  ctx.save();ctx.strokeStyle=C.ink;for(let y=y0+6;y<y1;y+=9){const r=rt+(rb-rt)*(y-y0)/(y1-y0);ctx.lineWidth=y>yc?2.2:0.6;ctx.globalAlpha=y>yc?1:0.5;ctx.beginPath();ctx.moveTo(F[0]-r,y);ctx.lineTo(F[0]+r,y+3);ctx.stroke();}ctx.restore();
+  bar(F[0],y0-50,F[0],y1+40,10,C.part);rope([[B[0]+Rb,yc],[F[0]-rc,yc]]);circ(F[0]-rc,yc,4);paint(C.hi,C.ink);
+  label('BARREL · mainspring inside',B[0],B[1]+150,'center');label('FUSEE',F[0],y1+70,'center');label('CHAIN',(B[0]+Rb+F[0]-rc)/2,yc-12,'center');}});
+
+/* ================= audit pass 51–80 ================= */
+/* exact Geneva-type kinematics: driver pin/tooth at radius r, N slots, centre distance d = r / sin(π/N); driven rests between steps */
+function genevaKin(theta,N){const be=PI/2-PI/N,k=Math.floor((theta+PI)/TAU),tm=mod(theta+PI,TAU)-PI,d=1,r=Math.sin(PI/N);let psi;
+  if(Math.abs(tm)<be)psi=Math.atan2(r*Math.sin(tm),d-r*Math.cos(tm));else psi=tm>0?PI/N:-PI/N;return{gam:-(k*TAU/N+psi),eng:Math.abs(tm)<be,tm};}
+/* driven-wheel outline: slots toward local angle π (+j·2π/N); locking hollows between them (radius RL about the driver centre when at rest) */
+function genevaWheel(N,d,pr,RL,o={}){const r=d*Math.sin(PI/N),Ro=Math.sqrt(d*d-r*r)+(o.extra??2),pts=[],M=N*48,sl=pr+1.5,lock=RL>0;
+  for(let i=0;i<M;i++){const t=i/M*TAU;let R=Ro;const j=Math.round((t-PI)/(TAU/N)),rel=t-PI-j*TAU/N;/* slot */
+    const half=Math.asin(Math.min(1,sl/Ro));if(Math.abs(rel)<half){/* inside slot mouth: go down the slot */}
+    if(lock){const jh=Math.round((t-PI-PI/N)/(TAU/N)),ch=PI+PI/N+jh*TAU/N,cx=d*Math.cos(ch),cy=d*Math.sin(ch),dx=R*Math.cos(t)-cx,dy=R*Math.sin(t)-cy;
+      if(Math.hypot(dx,dy)<RL+1){/* pull back onto the hollow arc */const ux=Math.cos(t),uy=Math.sin(t);const b=ux*cx+uy*cy,c=cx*cx+cy*cy-(RL+1)**2,disc=b*b-c;if(disc>0)R=Math.min(R,b-Math.sqrt(disc));}}
+    pts.push([R*Math.cos(t),R*Math.sin(t)]);}
+  /* cut the slots: rebuild as polygon with slot notches */
+  const out=[],rin=d-r-pr-3;for(let j=0;j<N;j++){const c=PI+j*TAU/N,next=c+TAU/N;const a0=c+Math.asin(sl/Ro),a1=next-Math.asin(sl/Ro);
+    const rot=(x,y,a)=>[x*Math.cos(a)-y*Math.sin(a),x*Math.sin(a)+y*Math.cos(a)];
+    /* slot j: from mouth (Ro) down to rin and back, on the far side */out.push(rot(Ro,-sl,c),rot(rin,-sl,c));for(let k=1;k<8;k++){const q=-PI/2+k*PI/8;out.push(rot(rin-sl*Math.cos(q)*0+(-sl)*Math.cos(q+PI/2)*0-sl*Math.sin(-q)*0+0,0,c));}
+    out.length-=7;for(let k=0;k<=8;k++){const q=PI/2+k*PI/8;out.push(rot(rin+sl*Math.cos(q),sl*Math.sin(q)*-1,c));}out.push(rot(Ro,sl,c));
+    for(const p of pts){const t=mod(Math.atan2(p[1],p[0])-a0,TAU);if(t>0&&t<a1-a0)out.push(p);}}
+  return{pts:out,Ro,r,rin};}
+/* driver: locking disk with a crescent cut-out on the pin side */
+function lockDiskPts(RL,d,Rc){const o=[],n=160;for(let i=0;i<n;i++){const t=i/n*TAU;let R=RL;const x=R*Math.cos(t),y=R*Math.sin(t);if(Math.hypot(x-d,y)<Rc){/* on the cut circle */const b=d*Math.cos(t),c=d*d-Rc*Rc,disc=b*b-c;if(disc>0)R=Math.max(0.3*RL,b-Math.sqrt(disc));}o.push([R*Math.cos(t),R*Math.sin(t)]);}return o;}
+function lockTooth(num,o){const N=o.N,d=190,r=d*Math.sin(PI/N),pr=9,lock=o.lock!==false,Ro=Math.sqrt(d*d-r*r)+2,RL=r-pr-6;
+  return reg({num,outLabel:'Driven wheel, turns',concept:false,N,d,r,pr,RL,lock,Ro,tooth:!!o.tooth,D:[400-d/2-10,262],Wc:[400+d/2-10,262],
+    wheel(){if(!this._w)this._w=genevaWheel(N,d,pr,RL);return this._w;},
+    update(phi){const k=genevaKin(phi,N);this.g={phi,w:k.gam,eng:k.eng};},output(){return -this.g.w/TAU;},
+    draw(){const g=this.g,D=[400-d/2-10,262],Wc=[D[0]+d,262],w=this.wheel(),c=Math.cos(g.w),s=Math.sin(g.w);
+      poly(w.pts.map(([x,y])=>[Wc[0]+x*c-y*s,Wc[1]+x*s+y*c]));ctx.closePath();circ(Wc[0],Wc[1],9,false);paint(C['steel-fill'],C.ink);pivot(Wc[0],Wc[1],6);
+      const t=g.phi,ct=Math.cos(t),st=Math.sin(t),T=([x,y])=>[D[0]+x*ct-y*st,D[1]+x*st+y*ct];
+      if(lock){poly(lockDiskPts(RL,d,Ro+4).map(T));ctx.closePath();paint(C['brass-fill'],C.ink);}
+      poly([[-14,-16],[r-6,-12],[r-6,12],[-14,16]].map(T));ctx.closePath();paint(C['brass-fill'],C.ink);
+      const P=T([r,0]);if(o.tooth){poly([[r-12,-pr],[r+6,-pr+2],[r+pr,0],[r+6,pr-2],[r-12,pr]].map(T));ctx.closePath();paint(C.part2,C.ink);}else{circ(P[0],P[1],pr);paint(C.part2,C.ink);}pivot(D[0],D[1],6);
+      label(g.eng?'TOOTH ENGAGED · wheel moves one space':(lock?'LOCKED · the driver’s rim sits in a hollow':'WHEEL AT REST'),400,480,'center');},
+    reads(){const g=this.g;return[['Per driver turn',`1/${N} turn`],['Phase',g.eng?'moving':'resting'],['Locking',lock?'driver rim in a hollow':'none']];}});}
+lockTooth(68,{N:6,tooth:true});lockTooth(69,{N:8,tooth:true});lockTooth(241,{N:6,lock:false});
+/* annulus (washer) in frame F */
+function annulus3(R,F,ro,ri,z0,z1,fill,n=48){for(let i=0;i<n;i++){const a=i/n*TAU,b=(i+1)/n*TAU,P=(r,t,z)=>F.at(r*Math.cos(t),r*Math.sin(t),z);
+  R.face([P(ro,a,z0),P(ro,b,z0),P(ro,b,z1),P(ro,a,z1)],fill);R.face([P(ri,a,z0),P(ri,b,z0),P(ri,b,z1),P(ri,a,z1)],fill);R.face([P(ro,a,z1),P(ro,b,z1),P(ri,b,z1),P(ri,a,z1)],fill);R.face([P(ro,a,z0),P(ro,b,z0),P(ri,b,z0),P(ri,a,z0)],fill);}}
+/* 51 · universal joint, second form: the two forks are pinned to a ring instead of a cross */
+reg({num:51,outLabel:'Output angle − input angle, °',params:[{id:'b',label:'Shaft angle',min:0,max:45,step:5,value:30,fmt:v=>v+'°'}],
+  update(phi){const b=this.P.b*PI/180,a1=phi,a2=Math.atan2(Math.sin(a1),Math.cos(a1)*Math.cos(b)),k=Math.round((a1-a2)/TAU);this.g={phi,b,a1,a2:a2+k*TAU};},output(){return(this.g.a2-this.g.a1)*180/PI;},
+  draw(){const g=this.g,R=R3({yaw:-0.5,pitch:0.32,sc:1,cx:400,cy:270}),ax1=[1,0,0],ax2=[Math.cos(g.b),Math.sin(g.b),0],e1=[0,Math.cos(g.a1),Math.sin(g.a1)],e2=v3.norm(v3.cross(ax2,e1)),Rk=58;
+    rod3(R,[-300,0,0],[-80,0,0],11,C['brass-fill']);rod3(R,v3.mul(ax2,80),v3.mul(ax2,300),11,C['steel-fill']);
+    const fork=(ax,e,fill,sg)=>{block3(R,v3.mul(ax,sg*74),e,ax,Rk*2+26,22,14,fill);for(const s of [1,-1])block3(R,v3.add(v3.mul(e,s*(Rk+9)),v3.mul(ax,sg*38)),ax,e,72,20,10,fill);};
+    fork(ax1,e1,C['brass-fill'],-1);fork(ax2,e2,C['steel-fill'],1);
+    const F=fr3([0,0,0],e1,e2);annulus3(R,F,Rk+7,Rk-7,-8,8,C.part2);
+    for(const e of [e1,e2])for(const s of [1,-1])rod3(R,v3.mul(e,s*(Rk-8)),v3.mul(e,s*(Rk+20)),5,C.part);
+    R.draw();label('INPUT · steady',150,430);label('RING JOINT · each fork is pinned to the ring at opposite points',400,480,'center');},
+  reads(v){const g=this.g,c=Math.cos(g.b),s=Math.sin(g.a1);return[['Shaft angle',`${this.P.b}°`],['Output speed now',`${(c/(1-s*s*(1-c*c))).toFixed(3)} × input`],['Lead / lag',`${((g.a2-g.a1)*180/PI).toFixed(1)}°`]];}});
+/* 74 · a mutilated bevel wheel (teeth on a third of its rim) turns the two bevels facing each other on one axis by turns, in opposite directions, with rests between */
+reg({num:74,outLabel:'Left bevel, turns',
+  pass(phi,pos){const W=TAU/3,s0=0,F=x=>Math.floor(x/TAU)*W+Math.min(mod(x,TAU),W);return F(pos-s0)-F(pos-s0-phi);},
+  update(phi){const ra=36/18;this.g={phi,aL:this.pass(phi,PI)*ra,aR:this.pass(phi,0)*ra};},output(){return this.g.aL/TAU;},
+  draw(){const g=this.g,R=R3({yaw:-0.35,pitch:0.5,sc:1.05,cx:400,cy:250}),m=6,Zc=36,Za=18,Rc=m*Zc/2,Ra=m*Za/2,dC=Math.atan2(Zc,Za),dA=PI/2-dC;
+    bevel3(R,[0,0,0],[0,0,-1],[1,0,0],Rc,Zc,dC,26,g.phi,C['brass-fill'],{seg:[0,TAU/3]});
+    bevel3(R,[0,0,0],[-1,0,0],[0,0,-1],Ra,Za,dA,26,g.aL,C['steel-fill']);bevel3(R,[0,0,0],[1,0,0],[0,0,-1],Ra,Za,dA,26,-g.aR,C['steel-fill']);
+    const Lc=Rc/Math.tan(dC),La=Ra/Math.tan(dA);rod3(R,[0,0,-Lc-14],[0,0,-Lc-150],8,C.part);rod3(R,[-La-14,0,0],[-La-170,0,0],7,C.part);rod3(R,[La+14,0,0],[La+170,0,0],7,C.part);
+    R.draw();const eL=Math.abs(mod(PI-g.phi,TAU))<TAU/3,eR=mod(-g.phi,TAU)<TAU/3;label(eL?'LEFT BEVEL DRIVEN':eR?'RIGHT BEVEL DRIVEN':'BOTH AT REST',400,470,'center');label('TEETH ON ONE THIRD OF THE RIM',400,40,'center');},
+  reads(){const g=this.g;return[['Left bevel',`${(g.aL/TAU).toFixed(2)} turns`],['Right bevel',`${(g.aR/TAU).toFixed(2)} turns, the other way`]];}});
+/* ---------- tappet and studs: the driver's tappet pin really pushes a stud; the wheel moves only while they touch ----------
+   The centre distance is found once so that one turn of the driver advances the wheel exactly one stud. */
+function tappetGeo(o){const N=o.N,rs=o.rs,ps=o.ps,rt=o.rt,pt=o.pt,R=pt+ps;
+  const run=(d,turns,g0)=>{let g=g0;const T=th=>[rt*Math.cos(th),rt*Math.sin(th)];const step=(th)=>{const t=T(th);for(let j=0;j<N;j++){const a=g+j*TAU/N,s=[d+rs*Math.cos(a),rs*Math.sin(a)];if(Math.hypot(t[0]-s[0],t[1]-s[1])<R){
+        const dist=dd=>{const b=g+j*TAU/N+dd;return Math.hypot(t[0]-d-rs*Math.cos(b),t[1]-rs*Math.sin(b));};const sg=dist(1e-4)>dist(-1e-4)?1:-1;let lo=0,hi=sg*0.9;for(let k=0;k<40;k++){const m=(lo+hi)/2;if(dist(m)<R)lo=m;else hi=m;}g+=hi;}}};
+    const n=Math.ceil(turns*TAU/0.01);for(let i=0;i<=n;i++)step(i/n*turns*TAU);return g;};
+  /* bisect the centre distance for one stud per turn */let lo=rs+rt-R*0.98,hi=rs+rt+R*0.6,best=null;for(let k=0;k<26;k++){const d=(lo+hi)/2,g1=run(d,2,PI+PI/N),g2=run(d,3,PI+PI/N),adv=Math.abs(g2-g1);if(adv>TAU/N)lo=d;else hi=d;best={d,g0:mod(g2,TAU)};}
+  return Object.assign({},o,{d:best.d,g0:best.g0,R});}
+function tappetSim(num,o){const G=tappetGeo(Object.assign({N:8,rs:110,ps:9,rt:92,pt:9},o));const D=o.D||[400-G.d/2-20,270],Wc=[D[0]+G.d,D[1]];
+  return reg({num,outLabel:'Driven wheel, turns',concept:!!o.concept,G,D,Wc,o,
+    reset(){this.gam=G.g0;this.last=null;},
+    update(phi){if(this.last===null){this.last=0;this.gam=G.g0;}const n=Math.max(1,Math.ceil(Math.abs(phi-this.last)/0.01));for(let i=1;i<=n;i++)this.push(this.last+(phi-this.last)*i/n);this.last=phi;this.g={phi,gam:this.gam,adv:(this.gam-G.g0)/(TAU/G.N)};},
+    push(th){const t=[G.rt*Math.cos(th),G.rt*Math.sin(th)],d=G.d;this.hit=false;for(let j=0;j<G.N;j++){const a=this.gam+j*TAU/G.N,s=[d+G.rs*Math.cos(a),G.rs*Math.sin(a)];if(Math.hypot(t[0]-s[0],t[1]-s[1])<G.R){this.hit=true;
+        const dist=dd=>{const b=this.gam+j*TAU/G.N+dd;return Math.hypot(t[0]-d-G.rs*Math.cos(b),t[1]-G.rs*Math.sin(b));};const sg=dist(1e-4)>dist(-1e-4)?1:-1;let lo=0,hi=sg*0.9;for(let k=0;k<40;k++){const m=(lo+hi)/2;if(dist(m)<G.R)lo=m;else hi=m;}this.gam+=hi;}}},
+    output(){return this.g.adv/G.N;},
+    draw(){const g=this.g,th=g.phi,rd=o.rd||G.rt-30;
+      /* wheel */if(o.style==='star'){const pts=[];for(let i=0;i<G.N;i++){const t=g.gam+i*TAU/G.N;pts.push([Wc[0]+(G.rs+4)*Math.cos(t),Wc[1]+(G.rs+4)*Math.sin(t)],[Wc[0]+G.rs*0.5*Math.cos(t+PI/G.N),Wc[1]+G.rs*0.5*Math.sin(t+PI/G.N)]);}poly(pts);ctx.closePath();paint(C['steel-fill'],C.ink);}
+      else{circ(Wc[0],Wc[1],G.rs-G.ps-10);paint(C['steel-fill'],C.ink);}
+      for(let i=0;i<G.N;i++){const t=g.gam+i*TAU/G.N,S=[Wc[0]+G.rs*Math.cos(t),Wc[1]+G.rs*Math.sin(t)];if(o.style!=='star')bar(Wc[0]+(G.rs-G.ps-12)*Math.cos(t),Wc[1]+(G.rs-G.ps-12)*Math.sin(t),S[0],S[1],6,C.part2);circ(S[0],S[1],G.ps);paint(C.part2,C.ink);}pivot(Wc[0],Wc[1],6);
+      /* driver */circ(D[0],D[1],rd);paint(C['brass-fill'],C.ink);
+      if(o.rim){const restR=Math.hypot(Wc[0]+G.rs*Math.cos(PI+PI/G.N)-D[0],Wc[1]+G.rs*Math.sin(PI+PI/G.N)-D[1])-G.ps-1;ctx.save();ctx.lineCap='butt';ctx.strokeStyle=C.ink;ctx.lineWidth=12;ctx.beginPath();ctx.arc(D[0],D[1],restR-6,th+0.55,th+TAU-0.55);ctx.stroke();ctx.strokeStyle=C['brass-fill'];ctx.lineWidth=9.6;ctx.stroke();ctx.restore();
+        bar(D[0],D[1],D[0]+(restR-6)*Math.cos(th+PI),D[1]+(restR-6)*Math.sin(th+PI),10,C['brass-fill']);}
+      const P=[D[0]+G.rt*Math.cos(th),D[1]+G.rt*Math.sin(th)];bar(D[0],D[1],P[0],P[1],o.tooth?20:12,C['brass-fill']);circ(P[0],P[1],G.pt);paint(C.part,C.ink);pivot(D[0],D[1],6);
+      if(o.detent){/* spring detent lever resting between studs */const Q=[Wc[0]+60,Wc[1]-G.rs-70],La=Math.hypot(Wc[0]-Q[0],Wc[1]-G.rs+4-Q[1]);let bt=Math.atan2(Wc[1]-Q[1],Wc[0]-Q[0])+0.15;
+        for(let k=0;k<80;k++){const T=[Q[0]+La*Math.cos(bt),Q[1]+La*Math.sin(bt)];let pen=Math.hypot(T[0]-Wc[0],T[1]-Wc[1])<G.rs-G.ps-6;for(let i=0;i<G.N&&!pen;i++){const t=g.gam+i*TAU/G.N;if(Math.hypot(T[0]-Wc[0]-G.rs*Math.cos(t),T[1]-Wc[1]-G.rs*Math.sin(t))<G.ps+6)pen=true;}if(!pen)break;bt-=0.01;}
+        const T=[Q[0]+La*Math.cos(bt),Q[1]+La*Math.sin(bt)];bar(Q[0],Q[1],T[0],T[1],9,C.part);circ(T[0],T[1],6);paint(C.part2,C.ink);pivot(Q[0],Q[1],5);springZ(Q[0]-40,Q[1]-30,(Q[0]+T[0])/2,(Q[1]+T[1])/2,8,5);}
+      label(o.label,400,485,'center');label(this.hit?'TAPPET PUSHING A STUD':'WHEEL AT REST',Wc[0],Wc[1]+G.rs+38,'center');},
+    reads(){const g=this.g;return[['Steps taken',`${Math.round(g.adv*100)/100}`],['Each step',`1/${G.N} turn`],['Driver turns per step','1']];}});}
+tappetSim(54,{N:6,style:'star',rs:100,label:'A PIN ON THE DISK KICKS THE STAR ROUND ONE POINT PER TURN',concept:true});
+tappetSim(65,{N:8,detent:true,label:'ONE TAPPET, ONE STUD PER TURN · A SPRING DETENT HOLDS THE WHEEL'});
+tappetSim(70,{N:8,rim:true,label:'THE RIM HOLDS THE STUDS · ITS OPENING LETS ONE STUD THROUGH PER TURN'});
+tappetSim(71,{N:8,rim:true,tooth:true,label:'TAPPET STRIKES A STUD WHILE THE RIM LOCKS THE OTHERS'});
+/* 63 · pins on the disk lift the tail of a spring drop; when a pin slips off the end of the tail the spring snaps the drop back and the pawl on its other end pulls the star on one tooth */
+reg({num:63,outLabel:'Star wheel, turns',N:10,Q:[330,190],La:190,Lh:120,D:[470,330],rp:80,np:4,rest:0.32,
+  reset(){this.k=0;this.prev=null;},
+  beta(phi){let b=this.rest,touch=false;for(let i=0;i<this.np;i++){const t=phi+i*TAU/this.np,P=[this.D[0]+this.rp*Math.cos(t),this.D[1]+this.rp*Math.sin(t)],dx=P[0]-this.Q[0],dy=P[1]-this.Q[1],d=Math.hypot(dx,dy);
+      if(d>this.La||dx<0)continue;const c=Math.atan2(dy,dx)-Math.asin(Math.min(1,15/d));if(c<b){b=c;touch=true;}}return{b,touch};},
+  update(phi){const B=this.beta(phi);if(this.prev!==null&&this.prev<this.rest-0.03&&B.b>=this.rest-1e-9)this.k++;this.prev=B.b;this.g={phi,b:B.b,touch:B.touch,k:this.k};},
+  output(){return this.g.k/this.N;},
+  draw(){const g=this.g,Q=this.Q,D=this.D,N=this.N,Wc=[175,330],Rw=72;circ(D[0],D[1],this.rp+20);paint(C['brass-fill'],C.ink);for(let i=0;i<this.np;i++){const t=g.phi+i*TAU/this.np;circ(D[0]+this.rp*Math.cos(t),D[1]+this.rp*Math.sin(t),9);paint(C.part2,C.ink);}pivot(D[0],D[1],6);
+    const sw=g.k*TAU/N;const pts=[];for(let i=0;i<N;i++){const t=sw+i*TAU/N-PI/2;pts.push([Wc[0]+Rw*Math.cos(t),Wc[1]+Rw*Math.sin(t)],[Wc[0]+Rw*0.62*Math.cos(t+PI/N),Wc[1]+Rw*0.62*Math.sin(t+PI/N)]);}poly(pts);ctx.closePath();paint(C['steel-fill'],C.ink);pivot(Wc[0],Wc[1],6);
+    const tail=[Q[0]+this.La*Math.cos(g.b),Q[1]+this.La*Math.sin(g.b)],head=[Q[0]-this.Lh*Math.cos(g.b),Q[1]-this.Lh*Math.sin(g.b)];bar(head[0],head[1],tail[0],tail[1],12,C.part);
+    const tip=[Wc[0]+Rw*Math.cos(sw-PI/2+TAU/N)+4,Wc[1]+Rw*Math.sin(sw-PI/2+TAU/N)];const pw=[tip[0],Math.max(tip[1],head[1]+40)];bar(head[0],head[1],pw[0],pw[1],7,C['brass-fill']);pivot(head[0],head[1],3);pivot(Q[0],Q[1],6);
+    const mid=[Q[0]-0.55*this.Lh*Math.cos(g.b),Q[1]-0.55*this.Lh*Math.sin(g.b)];springZ(mid[0],mid[1],mid[0],60,10,7);ctx.beginPath();ctx.rect(mid[0]-20,52,40,8);paint(C.part2,C.ink);
+    label(g.touch?'A PIN LIFTS THE TAIL OF THE DROP':'SNAPPED BACK · the pawl pulled the star on one tooth',400,500,'center');},
+  reads(){return[['Star steps',`${this.g.k}`],['Each step',`1/${this.N} turn`],['Steps per disk turn',`${this.np}`]];}});
+/* 64, 66, 67 · a worm turns the worm wheel slowly; a pin on it pushes an arm on a hollow shaft until the cam (64), weight (66) or tumbler (67) goes over and the hollow shaft runs ahead suddenly; it then rests until the pin catches up */
+function wormDrop(num,kind){const Zw=20,al=kind==='spring'?PI*5/3:PI;return reg({num,outLabel:'Hollow shaft, turns',
+  update(phi){const tg=phi/Zw,k=Math.floor(tg/TAU),u=tg-k*TAU;let th;if(u<al)th=k*TAU+u;else{const f=Math.min(1,(u-al)/0.06);th=k*TAU+al+(TAU-al)*f*f;}this.g={phi,tg,th,falling:u>=al&&u<al+0.06,rest:u>=al+0.06};},
+  output(){return this.g.th/TAU;},
+  draw(){const g=this.g,Wc=[330,250],Rg=110,yw=Wc[1]+Rg+26;drawGear(Wc[0],Wc[1],Rg,Zw,g.tg,C['steel-fill'],{bore:10});
+    ctx.beginPath();ctx.rect(150,yw-20,360,40);paint(C['brass-fill'],C.ink);ctx.save();ctx.beginPath();ctx.rect(150,yw-20,360,40);ctx.clip();ctx.strokeStyle=C.ink;ctx.lineWidth=2;const p=PI*2*Rg/Zw,sh=mod(g.phi/TAU*p,p);for(let x=150-p+sh;x<520;x+=p){ctx.beginPath();ctx.moveTo(x,yw-20);ctx.lineTo(x+p*0.5,yw+20);ctx.stroke();}ctx.restore();
+    const pin=[Wc[0]+85*Math.cos(g.tg-PI/2),Wc[1]+85*Math.sin(g.tg-PI/2)];
+    if(kind==='spring'){const r=t=>{t=mod(t,TAU);return t<al?40+40*t/al:80-40*(t-al)/(TAU-al);};const pts=[];for(let i=0;i<120;i++){const t=i/120*TAU;pts.push([Wc[0]+r(t)*Math.cos(t+g.th-PI/2),Wc[1]+r(t)*Math.sin(t+g.th-PI/2)]);}poly(pts);ctx.closePath();paint(C['brass-fill'],C.ink);
+      const fr=r(-g.th+PI/2+PI)/*follower at the left*/,F=[Wc[0]-fr-8,Wc[1]];const Qp=[Wc[0]-60,Wc[1]-150];bar(Qp[0],Qp[1],F[0],F[1],9,C.part);circ(F[0],F[1],8);paint(C.part2,C.ink);pivot(Qp[0],Qp[1],5);springZ(Qp[0]-100,F[1]-60,(Qp[0]+F[0])/2,(Qp[1]+F[1])/2,9,7);}
+    const arm=[Wc[0]+100*Math.cos(g.th-PI/2+0.12),Wc[1]+100*Math.sin(g.th-PI/2+0.12)];bar(Wc[0],Wc[1],arm[0],arm[1],10,C['brass-fill']);
+    if(kind!=='spring'){const wa=g.th+PI/2,Wt=[Wc[0]+150*Math.cos(wa),Wc[1]+150*Math.sin(wa)];bar(Wc[0],Wc[1],Wt[0],Wt[1],10,C['brass-fill']);if(kind==='weight'){ctx.save();ctx.translate(Wt[0],Wt[1]);ctx.rotate(wa);ctx.beginPath();ctx.rect(-18,-22,36,44);paint(C.part2,C.ink);ctx.restore();}else{circ(Wt[0],Wt[1],26);paint(C.part2,C.ink);}}
+    circ(pin[0],pin[1],8);paint(C.part,C.ink);pivot(Wc[0],Wc[1],7);
+    label(g.falling?'GONE OVER · the hollow shaft runs ahead':g.rest?'RESTING · waiting for the pin to catch up':'THE PIN PUSHES THE ARM ROUND',600,120,'center');label('WORM',330,yw+40,'center');label(kind==='spring'?'CAM PRESSED BY A SPRING':kind==='weight'?'WEIGHT ON AN ARM':'TUMBLER',600,140,'center');},
+  reads(){const g=this.g;return[['Worm wheel',`${(g.tg/TAU).toFixed(2)} turns`],['Hollow shaft',`${(g.th/TAU).toFixed(2)} turns`],['State',g.falling?'running ahead':g.rest?'resting':'being pushed']];}});}
+wormDrop(64,'spring');wormDrop(66,'weight');wormDrop(67,'tumbler');
+/* bevel differential drawn as solids: two side bevels on one axis, two pinions on radial axles in a carrier ring that turns about the same axis.
+   Carrier = mean of the two side wheels; the pinions spin by the difference. */
+function diffScene(R,g,o={}){const Z=18,Rp=54,d=PI/4,f=24,c=g.c||0,a=g.a||0,b=g.b||0,ps=(a-c);
+  bevel3(R,[0,0,0],[-1,0,0],[0,0,1],Rp,Z,d,f,a,C['brass-fill']);bevel3(R,[0,0,0],[1,0,0],[0,0,1],Rp,Z,d,f,-b+PI/Z,C['steel-fill']);
+  const rd=[0,Math.cos(c),Math.sin(c)];for(const s of [1,-1]){const n=v3.mul(rd,s);bevel3(R,[0,0,0],n,[1,0,0],Rp,Z,d,f,s*ps+PI/Z*0.5,C.hi,{boss:6});rod3(R,v3.mul(n,Rp+8),v3.mul(n,Rp+44),5,C.part);}
+  const F=fr3([0,0,0],[0,Math.cos(c),Math.sin(c)],[0,-Math.sin(c),Math.cos(c)]);/* ring plane ⟂ x: frame u,v in y-z */const Fr={at:(x,y,z)=>[z,F.u[1]*x+F.v[1]*y,F.u[2]*x+F.v[2]*y],c:[0,0,0]};
+  annulus3(R,{at:(x,y,z)=>Fr.at(x,y,z)},Rp+56,Rp+40,-10,10,C.part2,56);
+  rod3(R,[-Rp-14,0,0],[-300,0,0],9,C['brass-fill']);rod3(R,[Rp+14,0,0],[300,0,0],9,C['steel-fill']);}
+for(const n of [61,62,495,226,503,506]){const m=SIMS_NEW[n];if(!m)continue;const lab=m.draw.toString().match(/label\(o\.label/)?null:null;
+  m.concept=false;const old=m.draw;m.draw=function(){const R=R3({yaw:-0.18,pitch:0.42,sc:1.1,cx:400,cy:250});diffScene(R,this.g);R.draw();
+    label(n===495||n===226?'LEFT WHEEL FIXED':'LEFT WHEEL',150,420,'center');label(n===495||n===226?'OUTPUT':'RIGHT WHEEL',650,420,'center');label('CARRIER RING WITH TWO PINIONS · it turns at the mean of the two wheels',400,480,'center');};}
+/* 77 (78, 206, 236) · lever pivoted beside the wheel, two pawls hinged at one point on it: the upper one pushes on one stroke, the lower (hooked) one pulls on the other, so the wheel turns on both strokes */
+function dblPawl(num,o={}){return reg({num,outLabel:'Wheel angle, degrees',N:24,concept:!!o.concept,Cc:[360,280],A:[640,40],La:250,rr:100,rt:122,
+  reset(){this.W=0;this.lx=null;},
+  H(phi){const a=0.16*Math.sin(phi),b=PI/2+0.08+a;return[this.A[0]+this.La*Math.cos(b),this.A[1]+this.La*Math.sin(b)];},
+  update(phi){const H=this.H(phi);if(this.lx!==null)this.W+=Math.abs(H[0]-this.lx)/this.rt;this.dir=this.lx===null?1:Math.sign(H[0]-this.lx)||this.dir||1;this.lx=H[0];this.g={phi,H};},
+  output(){return this.W*180/PI;},
+  draw(){const g=this.g,C0=this.Cc,N=this.N,H=g.H,A=this.A;sawWheel(C0[0],C0[1],-this.W,N,this.rr,this.rt,C['steel-fill']);pivot(C0[0],C0[1],6);
+    bar(A[0],A[1],H[0]+(H[0]-A[0])*0.25,H[1]+(H[1]-A[1])*0.25,16,C['brass-fill']);pivot(A[0],A[1],7);ground(A[0],A[1]-12,40,true);
+    for(const s of [-1,1]){const ta=s*0.72,r=sawR(ta+this.W,N,this.rr,this.rt)+1,T=[C0[0]+r*Math.cos(ta),C0[1]+r*Math.sin(ta)],work=(s<0)===(this.dir<0);bar(H[0],H[1],T[0],T[1],8,work?C.part2:C.part);if(s>0){ctx.beginPath();ctx.moveTo(T[0],T[1]);ctx.lineTo(T[0]-8,T[1]-8);paint(null,C.ink,3);}}
+    pivot(H[0],H[1],5);label('UPPER PAWL PUSHES ONE WAY, LOWER HOOKED PAWL PULLS THE OTHER',400,480,'center');label(this.dir<0?'UPPER PAWL WORKING':'LOWER PAWL WORKING',C0[0],C0[1]+160,'center');},
+  reads(){return[['Wheel turned',`${(this.W*180/PI).toFixed(0)}°`],['Strokes used','both'],['Motion','nearly continuous']];}});}
+dblPawl(77);dblPawl(78,{concept:true});dblPawl(206);dblPawl(236);
+/* 76 · a stud on the large wheel lifts a pivoted tappet once a turn; the tappet's hinged end pushes the ratchet on one tooth, then falls back by its weight */
+reg({num:76,outLabel:'Count',N:10,D:[230,300],rd:110,F:[400,170],L1:120,L2:110,
+  reset(){this.k=0;this.prevB=null;this.bmax=null;},
+  beta(phi){const P=[this.D[0]+this.rd*Math.cos(phi),this.D[1]+this.rd*Math.sin(phi)],dx=P[0]-this.F[0],dy=P[1]-this.F[1],d=Math.hypot(dx,dy);let b=0.5;/* short arm points left-down at angle PI-b */
+    if(d<this.L1&&dx<0){const c=PI-Math.atan2(dy,dx)+Math.asin(Math.min(1,12/d));/* arm angle measured below horizontal */const bb=PI-(Math.atan2(dy,dx)+Math.asin(Math.min(1,12/d)));if(bb<b)b=bb;}return b;},
+  update(phi){if(this.bmax===null){let mn=1;for(let i=0;i<360;i++)mn=Math.min(mn,this.beta(i/360*TAU));this.bmin=mn;this.bmax=1;}const b=this.beta(phi);if(this.prevB!==null&&this.prevB<0.5-1e-6&&b>=0.5-1e-6)this.k++;this.prevB=b;
+    const lift=(0.5-b)/(0.5-this.bmin||1);this.g={phi,b,s:Math.max(0,Math.min(1,lift)),w:-(this.k+Math.max(0,Math.min(1,lift)))*TAU/this.N};},
+  output(){return this.k+this.g.s;},
+  draw(){const g=this.g,D=this.D,F=this.F,Wc=[590,250],N=this.N;circ(D[0],D[1],this.rd+18);paint(C['brass-fill'],C.ink);const P=[D[0]+this.rd*Math.cos(g.phi),D[1]+this.rd*Math.sin(g.phi)];circ(P[0],P[1],10);paint(C.part2,C.ink);pivot(D[0],D[1],6);
+    sawWheel(Wc[0],Wc[1],g.w,N,62,88,C['steel-fill']);circ(Wc[0],Wc[1],46);paint(C.hi,C.ink);ctx.save();ctx.font='600 28px -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, Arial, sans-serif';ctx.fillStyle=C.ink;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(mod(this.k,100)).padStart(2,'0'),Wc[0],Wc[1]);ctx.restore();pivot(Wc[0],Wc[1]-60,0.1);
+    const short=[F[0]-this.L1*Math.cos(g.b),F[1]+this.L1*Math.sin(g.b)],long=[F[0]+this.L2*Math.cos(g.b),F[1]-this.L2*Math.sin(g.b)];bar(short[0],short[1],long[0],long[1],12,C.part);
+    const ta=PI+0.35,r=sawR(ta-g.w,N,62,88)+2,T=[Wc[0]+r*Math.cos(ta),Wc[1]+r*Math.sin(ta)];bar(long[0],long[1],T[0],T[1],8,C['brass-fill']);pivot(long[0],long[1],4);pivot(F[0],F[1],6);
+    label('STUD LIFTS THE TAPPET ONCE A TURN · its hinged end moves the count wheel one tooth',400,480,'center');},
+  reads(){return[['Count',`${this.k}`],['Per turn','one tooth']];}});
+
+/* ================= audit pass 81–115 ================= */
+/* 82 · two treadles tied by a strap over a pulley rock two arms on the ratchet's centre; each arm's pawl drives on its own stroke, so the one wheel turns almost continuously */
+reg({num:82,outLabel:'Ratchet wheel, turns',N:20,
+  reset(){this.w=0;this.la=null;},
+  update(phi){const a=0.32*Math.sin(phi);if(this.la!==null){const d=a-this.la;this.w+=Math.max(0,d)+Math.max(0,-d);this.dir=Math.sign(d)||this.dir||1;}this.la=a;this.g={phi,a};},
+  output(){return this.w/TAU;},
+  draw(){const g=this.g,O=[400,230],N=this.N,rr=78,rt=98,A=[[-1,PI+0.5],[1,-0.5]];sawWheel(O[0],O[1],-this.w,N,rr,rt,C['steel-fill']);pivot(O[0],O[1],6);
+    const P=[400,60];pulley(P[0],P[1],26,g.a*4,C.part);
+    for(const [s,base] of A){const ang=base+s*g.a,E=[O[0]+150*Math.cos(ang),O[1]+150*Math.sin(ang)];bar(O[0],O[1],E[0],E[1],13,C['brass-fill']);
+      const H=[O[0]+(rt+22)*Math.cos(ang),O[1]+(rt+22)*Math.sin(ang)],ta=ang-s*0.3,r=sawR(ta+this.w,N,rr,rt)+1,T=[O[0]+r*Math.cos(ta),O[1]+r*Math.sin(ta)];const work=(s<0)===(this.dir>0);bar(H[0],H[1],T[0],T[1],7,work?C.part2:C.part);pivot(H[0],H[1],3.5);
+      const Tp=[400+s*250,470],tl=230,tang=-s*(0.12+0.5*(E[1]-O[1])/600),Tt=[Tp[0]-s*tl*Math.cos(tang),Tp[1]+tl*Math.sin(tang)*s*-1];const tip=[Tp[0]-s*tl,Tp[1]-(Tp[1]-E[1]-140)*0.25];
+      bar(Tp[0],Tp[1],tip[0],tip[1],12,C.part);pivot(Tp[0],Tp[1],5);bar(E[0],E[1],tip[0],tip[1],5,C.part2);rope([[tip[0],tip[1]],[P[0]+s*26,P[1]]]);}
+    label('TWO TREADLES ON ONE STRAP · each arm’s pawl drives on its own stroke',400,505,'center');},
+  reads(){return[['Wheel',`${(this.w/TAU).toFixed(2)} turns`],['Drives on','both treadles']];}});
+/* 94 · a plate with a spiral groove turns against a plate with radial slots: the bolts at the crossings move in or out together */
+reg({num:94,outLabel:'Bolt radius, mm',
+  update(phi){const t=1.3*Math.sin(phi*0.6);this.g={phi,t,r:[0,1,2].map(k=>this.rad(k,t))};},
+  rad(k,t){const s0=-PI/2+k*TAU/3;/* spiral r = 40 + 18·θ/τ·... find the crossing between 60 and 150 */const a=18/(PI/3);let best=null;for(let n=-3;n<6;n++){const th=s0-t+n*TAU,r=40+a*th;if(r>55&&r<160&&(!best||Math.abs(r-105)<Math.abs(best-105)))best=r;}return best||100;},
+  output(){return this.g.r[0];},
+  draw(){const g=this.g,O=[400,265];circ(O[0],O[1],185);paint(C['brass-fill'],C.ink);const a=18/(PI/3);ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=16;ctx.lineCap='round';ctx.beginPath();for(let i=0;i<=700;i++){const th=i/700*TAU*2.4,r=40+a*th*1;if(r>175)break;const x=O[0]+r*Math.cos(th+g.t),y=O[1]+r*Math.sin(th+g.t);i?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.stroke();ctx.strokeStyle=C.sheet;ctx.lineWidth=12;ctx.stroke();ctx.restore();
+    ctx.save();ctx.globalAlpha=0.55;circ(O[0],O[1],170);for(let k=0;k<3;k++){const s=-PI/2+k*TAU/3;const c=Math.cos(s),sn=Math.sin(s);ctx.moveTo(O[0]+50*c-9*sn,O[1]+50*sn+9*c);ctx.lineTo(O[0]+165*c-9*sn,O[1]+165*sn+9*c);ctx.lineTo(O[0]+165*c+9*sn,O[1]+165*sn-9*c);ctx.lineTo(O[0]+50*c+9*sn,O[1]+50*sn-9*c);ctx.closePath();}paint(C['steel-fill'],C.ink);ctx.restore();
+    for(let k=0;k<3;k++){const s=-PI/2+k*TAU/3,r=g.r[k];circ(O[0]+r*Math.cos(s),O[1]+r*Math.sin(s),8);paint(C.part2,C.ink);}pivot(O[0],O[1],6);
+    label('TURN THE SPIRAL PLATE · the bolts in the radial slots move in or out together',400,480,'center');},
+  reads(){return[['Bolt radius',`${this.g.r[0].toFixed(0)} mm`],['Use','chucks, adjustable cranks']];}});
+/* 98 · the crank pin runs in an endless groove cut in a swinging arm; the groove's shape sets an irregular swing */
+reg({num:98,outLabel:'Arm angle, degrees',D:[300,290],rp:72,Q:[640,90],
+  th(phi){return 0.62+0.16*Math.sin(phi)+0.07*Math.sin(2*phi+0.6);},
+  groove(){if(this._g)return this._g;const pts=[];for(let i=0;i<240;i++){const p=i/240*TAU,P=[this.D[0]+this.rp*Math.cos(p),this.D[1]+this.rp*Math.sin(p)],t=PI-this.th(p)*-1,dx=P[0]-this.Q[0],dy=P[1]-this.Q[1],a=-this.ang(p);pts.push([dx*Math.cos(a)-dy*Math.sin(a),dx*Math.sin(a)+dy*Math.cos(a)]);}return this._g=pts;},
+  ang(p){return PI-this.th(p)*-1+0;},
+  update(phi){this.g={phi,a:this.ang(phi)};},output(){return this.g.a*180/PI;},
+  draw(){const g=this.g,D=this.D,Q=this.Q,G=this.groove(),c=Math.cos(g.a),s=Math.sin(g.a),T=([x,y])=>[Q[0]+x*c-y*s,Q[1]+x*s+y*c];circ(D[0],D[1],this.rp+30);paint(C['brass-fill'],C.ink);pivot(D[0],D[1],6);
+    const hullPts=[];for(const p of G)for(let k=0;k<8;k++){hullPts.push([p[0]+20*Math.cos(k*PI/4),p[1]+20*Math.sin(k*PI/4)]);}for(let k=0;k<16;k++)hullPts.push([20*Math.cos(k*PI/8),20*Math.sin(k*PI/8)]);
+    const hp=hullPts.sort((a,b)=>a[0]-b[0]||a[1]-b[1]),cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]),lo=[],up=[];for(const p of hp){while(lo.length>1&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p);}for(let i=hp.length-1;i>=0;i--){const p=hp[i];while(up.length>1&&cr(up[up.length-2],up[up.length-1],p)<=0)up.pop();up.push(p);}
+    poly(lo.slice(0,-1).concat(up.slice(0,-1)).map(T));ctx.closePath();ctx.save();ctx.globalAlpha=0.9;paint(C['steel-fill'],C.ink);ctx.restore();
+    ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=18;ctx.lineJoin='round';poly(G.map(T));ctx.closePath();ctx.stroke();ctx.strokeStyle=C.sheet;ctx.lineWidth=15;ctx.stroke();ctx.restore();
+    const P=[D[0]+this.rp*Math.cos(g.phi),D[1]+this.rp*Math.sin(g.phi)];bar(D[0],D[1],P[0],P[1],10,C['brass-fill']);circ(P[0],P[1],7);paint(C.part2,C.ink);pivot(Q[0],Q[1],7);ground(Q[0],Q[1]-12,40,true);
+    label('CRANK PIN IN AN ENDLESS GROOVE CUT IN THE ARM · the groove’s shape gives an irregular swing',400,490,'center');},
+  reads(){return[['Arm',`${(this.g.a*180/PI).toFixed(1)}°`]];}});
+/* 115 · two equal wheels, one above and one below, drive a rack toothed on both sides; the rack pitch now matches the wheels */
+reg({num:115,outLabel:'Rack position, mm',
+  update(phi){this.g={phi,x:110*Math.sin(phi*0.5)};},output(){return this.g.x;},
+  draw(){const g=this.g,R=60,Z=24,m=2*R/Z,p=PI*m,y0=270,a=g.x/R;for(const s of [-1,1]){const cy=y0+s*(R+18);drawGear(400,cy,R,Z,(s<0?a:-a)+PI/2+(s<0?0:PI/Z),C['brass-fill'],{bore:6});pivot(400,cy,5);}
+    const x0=400+g.x-230,x1=400+g.x+230,yt=y0-18,yb=y0+18;const up=rackTeeth(x0,x1,400+g.x,p,yt,m,true),dn=rackTeeth(x0,x1,400+g.x,p,yb,m,false);
+    poly([[x0,yt+1.25*m],...up,[x1,yt+1.25*m],[x1,yb-1.25*m],...dn.slice().reverse(),[x0,yb-1.25*m]]);ctx.closePath();paint(C['steel-fill'],C.ink);
+    label('TWO EQUAL WHEELS ON A DOUBLE RACK · equal force on each side',400,480,'center');},
+  reads(){return[['Rack',`${this.g.x.toFixed(0)} mm`],['Wheels','turn opposite ways, same speed']];}});
+/* 143 · the worm and its wheel ride on a sliding frame; a rod from a pin on the wheel to a fixed point makes the frame traverse back and forth as the wheel turns */
+reg({num:143,outLabel:'Frame position, mm',Zw:16,F:[700,300],L:250,r:70,
+  update(phi){const w=phi/this.Zw,F=this.F,y0=230;const cx0=330;/* frame carries wheel centre at (cx0+x, y0) */const px=Math.cos(w)*this.r,py=Math.sin(w)*this.r,dy=F[1]-(y0+py);const x=F[0]-Math.sqrt(Math.max(0,this.L*this.L-dy*dy))-(cx0+px);this.g={phi,w,x,y0,cx0};},
+  output(){return this.g.x;},
+  draw(){const g=this.g,C0=[g.cx0+g.x,g.y0],R=96,yw=C0[1]+R+24;ctx.beginPath();ctx.rect(C0[0]-150,C0[1]-120,300,yw+40-(C0[1]-120));ctx.rect(C0[0]-138,C0[1]-108,276,yw+28-(C0[1]-108));paint(C.part2,C.ink);
+    drawGear(C0[0],C0[1],R,this.Zw*2,g.w,C['steel-fill'],{bore:8});pivot(C0[0],C0[1],6);
+    ctx.beginPath();ctx.rect(C0[0]-110,yw-18,220,36);paint(C['brass-fill'],C.ink);ctx.save();ctx.beginPath();ctx.rect(C0[0]-110,yw-18,220,36);ctx.clip();ctx.strokeStyle=C.ink;ctx.lineWidth=2;const p=PI*2*R/(this.Zw*2),sh=mod(g.phi/TAU*p,p);for(let x=C0[0]-110-p+sh;x<C0[0]+120;x+=p){ctx.beginPath();ctx.moveTo(x,yw-18);ctx.lineTo(x+p*0.5,yw+18);ctx.stroke();}ctx.restore();
+    stripeShaft(40,760,yw,7,g.phi,C.part);const P=[C0[0]+this.r*Math.cos(g.w),C0[1]+this.r*Math.sin(g.w)];bar(P[0],P[1],this.F[0],this.F[1],10,C['brass-fill']);circ(P[0],P[1],7);paint(C.part,C.ink);pivot(this.F[0],this.F[1],6);ground(this.F[0],this.F[1]+12,40);
+    for(const x of [120,560]){ctx.beginPath();ctx.rect(x,yw+52,80,10);paint(C.part2,C.ink);}label('WORM AND WHEEL RIDE ON THE SLIDING FRAME · the rod to a fixed pin makes it traverse',400,500,'center');},
+  reads(){return[['Frame',`${this.g.x.toFixed(0)} mm`],['Traverse','back and forth once per wheel turn']];}});
+/* stud pushing an arm: returns the extra angle (from rest) the arm must turn so the stud just touches it */
+function studPush(F,base,La,P,gap,sg){const dx=P[0]-F[0],dy=P[1]-F[1],d=Math.hypot(dx,dy);if(d>La||d<gap)return 0;const psi=Math.atan2(dy,dx);let a=mod(psi-sg*Math.asin(gap/d)-base+PI,TAU)-PI;return sg>0?Math.max(0,a):Math.min(0,a);}
+/* 154 · studs on the disk press one arm of a bell crank; a weighted cord on the other arm pulls it back */
+reg({num:154,outLabel:'Cord pull, mm',O:[280,300],F:[440,180],
+  update(phi){const O=this.O,F=this.F,base=PI*0.66;let a=0;for(let k=0;k<3;k++){const t=phi+k*TAU/3,P=[O[0]+85*Math.cos(t),O[1]+85*Math.sin(t)];const v=studPush(F,base,128,P,16,-1);if(v<a)a=v;}this.g={phi,a:-a};},
+  output(){return this.g.a*140;},
+  draw(){const g=this.g,O=this.O,F=this.F;circ(O[0],O[1],100);paint(C['brass-fill'],C.ink);for(let k=0;k<3;k++){const t=g.phi+k*TAU/3;circ(O[0]+85*Math.cos(t),O[1]+85*Math.sin(t),10);paint(C.part2,C.ink);}pivot(O[0],O[1],6);
+    const a=-g.a,A1=[F[0]+128*Math.cos(PI*0.66+a),F[1]+128*Math.sin(PI*0.66+a)],A2=[F[0]+140*Math.cos(-0.1+a),F[1]+140*Math.sin(-0.1+a)];bar(F[0],F[1],A1[0],A1[1],12,C['steel-fill']);bar(F[0],F[1],A2[0],A2[1],12,C['steel-fill']);pivot(F[0],F[1],6);
+    const Pp=[A2[0]+40,90];pulley(Pp[0]+10,Pp[1],18,0,C.part);rope([[A2[0],A2[1]],[Pp[0]-8,Pp[1]],[Pp[0]+28,Pp[1]],[Pp[0]+28,300+g.a*140]]);weight(Pp[0]+28,300+g.a*140,44,36,'');
+    label('A STUD PRESSES THE ARM · the weighted cord pulls it back',400,480,'center');},
+  reads(){return[['Cord pull',`${(this.g.a*140).toFixed(0)} mm`],['Strokes per turn','3']];}});
+/* 153 · studs push the bar out by a tab beneath it; a bell crank brings it back */
+reg({num:153,outLabel:'Bar position, mm',O:[300,280],
+  update(phi){const O=this.O;let x=0;for(let k=0;k<4;k++){const t=phi+k*PI/2,c=Math.cos(t),s=Math.sin(t);if(c>0&&Math.abs(95*s)<22)x=Math.max(x,95*c+10-60);}this.g={phi,x:Math.max(0,x)};},
+  output(){return this.g.x;},
+  draw(){const g=this.g,O=this.O;circ(O[0],O[1],110);paint(C['brass-fill'],C.ink);for(let k=0;k<4;k++){const t=g.phi+k*PI/2;circ(O[0]+95*Math.cos(t),O[1]+95*Math.sin(t),10);paint(C.part2,C.ink);}pivot(O[0],O[1],6);
+    const X=O[0]+60+g.x;ctx.beginPath();ctx.rect(X,O[1]-50,220,24);paint(C['steel-fill'],C.ink);ctx.beginPath();ctx.rect(X,O[1]-26,14,44);paint(C['steel-fill'],C.ink);
+    const F=[O[0]+340,O[1]-110],a=g.x/120;bar(F[0],F[1],F[0]-60*Math.cos(a)+0,F[1]+60,8,C.part);bar(F[0],F[1],F[0]+70,F[1]-20,8,C.part);pivot(F[0],F[1],5);
+    for(const gx of [520,640]){ctx.beginPath();ctx.rect(gx,O[1]-62,40,8);ctx.rect(gx,O[1]-22,40,8);paint(C.part2,C.ink);}
+    label('STUDS PUSH THE TAB · THE BELL CRANK RETURNS THE BAR',400,480,'center');},
+  reads(){return[['Bar',`${this.g.x.toFixed(0)} mm`],['Pushes per turn','4']];}});
+/* 166 · a slot in the connecting rod lets it rest at each end of the stroke while the crank keeps turning (brick-press mould) */
+reg({num:166,outLabel:'Mould position, mm',O:[220,280],r:80,L0:260,s:70,
+  reset(){this.x=null;},
+  update(phi){const p=this.O[0]+this.r*Math.cos(phi);if(this.x===null)this.x=p+this.L0+this.s/2;this.x=Math.min(Math.max(this.x,p+this.L0),p+this.L0+this.s);this.g={phi,x:this.x,p,py:this.O[1]+this.r*Math.sin(phi)};},
+  output(){return this.g.x-(this.O[0]+this.L0+this.s/2);},
+  draw(){const g=this.g,O=this.O,y=O[1];circ(O[0],O[1],this.r+24);paint(C['brass-fill'],C.ink);bar(O[0],O[1],O[0]+this.r*Math.cos(g.phi),g.py,10,C.part2);pivot(O[0],O[1],6);
+    const x0=g.x-this.L0-this.s-14;ctx.beginPath();ctx.rect(x0,y-16,this.L0+this.s+14,32);ctx.rect(x0+8,y-7,this.s+12,14);paint(C['steel-fill'],C.ink);circ(g.p,y,7);paint(C.part,C.ink);
+    ctx.beginPath();ctx.rect(g.x,y-40,120,80);paint(C.part2,C.ink);for(const gx of [g.x+20,g.x+60]){ctx.beginPath();ctx.rect(gx,y-28,30,56);paint(C.sheet,C.ink);}
+    for(const gy of [y-52,y+44]){ctx.beginPath();ctx.rect(440,gy,320,8);paint(C.part,C.ink);}
+    const resting=Math.abs(g.x-(g.p+this.L0))>0.5&&Math.abs(g.x-(g.p+this.L0+this.s))>0.5;label(resting?'PIN TRAVELS IN THE SLOT · the mould rests':'PIN AT THE END OF THE SLOT · the mould moves',400,470,'center');},
+  reads(){return[['Mould',`${this.output().toFixed(0)} mm`],['Rest at each end','while the pin crosses the slot']];}});
+
+/* ================= audit pass 191–230 ================= */
+/* part-toothed outlines (local, about 0,0): external sector with teeth for local angles a0..a1, root circle elsewhere */
+function sectorExt(R,Z,a0,a1,pie){const m=2*R/Z,rr=R-1.25*m,pts=gearPts(0,0,R,Z,0,false,a0,a1);if(pie){const h=TAU/Z/2;pts.unshift([rr*Math.cos(a0-h),rr*Math.sin(a0-h)]);pts.push([rr*Math.cos(a1+h),rr*Math.sin(a1+h)],[0,0]);return pts;}const e=Math.atan2(pts[pts.length-1][1],pts[pts.length-1][0]);let s=Math.atan2(pts[0][1],pts[0][0]);while(s<=e)s+=TAU;
+  for(let i=1;i<48;i++){const t=e+(s-e)*i/48;pts.push([rr*Math.cos(t),rr*Math.sin(t)]);}return pts;}
+/* internal sector: inner teeth for a0..a1, closed by an outer arc of radius Rout (a C-shaped piece) */
+function sectorInt(R,Z,a0,a1,Rout){const pts=gearPts(0,0,R,Z,0,true,a0,a1),m=2*R/Z,b0=a0-0.6*TAU/Z,b1=a1+0.6*TAU/Z,ro=R+1.25*m;
+  const out=[[ro*Math.cos(b0),ro*Math.sin(b0)],...pts,[ro*Math.cos(b1),ro*Math.sin(b1)]];for(let i=0;i<=48;i++){const t=b1+(b0-b1)*i/48;out.push([Rout*Math.cos(t),Rout*Math.sin(t)]);}return out;}
+function polyAt(pts,cx,cy,a){const c=Math.cos(a),s=Math.sin(a);poly(pts.map(([x,y])=>[cx+x*c-y*s,cy+x*s+y*c]));ctx.closePath();}
+
+/* 191 · scroll gear: teeth along a one-turn spiral (radius 50 → 120). The pinion's carriage slides on a radial guide and a band holds it
+   against the scroll, so the pinion follows the growing radius; its centre is solved exactly (pitch point + pinion radius along the normal, on the guide line). */
+{const r0=50,k=70/TAU,M=1600,Z=10,O=[300,265];
+ const cur=s=>{const r=r0+k*s;return[r*Math.cos(s),-r*Math.sin(s)];},tan=s=>{const r=r0+k*s;return[k*Math.cos(s)-r*Math.sin(s),-k*Math.sin(s)-r*Math.cos(s)];};
+ const A=[0];let L=0;for(let i=1;i<=M;i++){const a=cur((i-1)/M*TAU),b=cur(i/M*TAU);L+=Math.hypot(b[0]-a[0],b[1]-a[1]);A.push(L);}
+ const nT=Math.round(L/(TAU*25/Z)),p=L/nT,rp=Z*p/TAU,m=p/PI;
+ const arcAt=s=>{const x=Math.max(0,Math.min(M-1e-6,s/TAU*M)),i=Math.floor(x);return A[i]+(A[i+1]-A[i])*(x-i);};
+ const sAt=a=>{let lo=0,hi=M;while(hi-lo>1){const md=(lo+hi)>>1;if(A[md]<=a)lo=md;else hi=md;}return(lo+(a-A[lo])/((A[lo+1]-A[lo])||1))/M*TAU;};
+ /* outline: teeth (centres at arc (j+½)p) along the spiral, then the radial step back to the start */
+ const outline=[];{const n=nT*20;for(let i=0;i<=n;i++){const a=i/n*L,s=sAt(a),q=cur(s),t=tan(s),tl=Math.hypot(t[0],t[1]),u=Math.abs(mod(a/p,1)-0.5),h=u<0.15?m:u>0.35?-1.2*m:m+(-2.2*m)*(u-0.15)/0.2;outline.push([q[0]-t[1]/tl*h,q[1]+t[0]/tl*h]);}}
+ const nrm=s=>{const t=tan(s),tl=Math.hypot(t[0],t[1]);return[-t[1]/tl,t[0]/tl];};
+ reg({num:191,outLabel:'Pinion turns',O,rp,Z,outline,cur,nrm,arcAt,
+   update(phi){const th=PI+(PI-0.45)*Math.sin(phi*0.5),c=Math.cos(th),sn=Math.sin(th);
+     const f=s=>{const q=cur(s),n=nrm(s);const x=q[0]+rp*n[0],y=q[1]+rp*n[1];return x*sn+y*c;};
+     let s=th;for(let it=0;it<20;it++){const v=f(s),d=(f(s+1e-4)-f(s-1e-4))/2e-4;const ds=v/d;s-=ds;if(Math.abs(ds)<1e-9)break;}
+     const q=cur(s),n=nrm(s),W=[O[0]+q[0]*c-q[1]*sn,O[1]+q[0]*sn+q[1]*c],nw=[n[0]*c-n[1]*sn,n[0]*sn+n[1]*c],P=[W[0]+rp*nw[0],W[1]+rp*nw[1]];
+     const pa=Math.atan2(-nw[1],-nw[0])-arcAt(s)/rp;this.g={phi,th,s,W,P,pa,r:Math.hypot(W[0]-O[0],W[1]-O[1])};},
+   output(){return this.g.pa/TAU;},
+   draw(){const g=this.g;polyAt(outline,O[0],O[1],g.th);circ(O[0],O[1],8,false);paint(C['brass-fill'],C.ink);pivot(O[0],O[1],6);
+     ctx.beginPath();ctx.rect(O[0]+40,O[1]-30,330,8);ctx.rect(O[0]+40,O[1]+22,330,8);paint(C.part,C.ink);
+     ctx.beginPath();ctx.rect(g.P[0]-30,O[1]-22,60,44);paint(C.part2,C.ink);drawGear(g.P[0],g.P[1],rp,Z,g.pa,C['steel-fill'],{bore:4});pivot(g.P[0],g.P[1],3);
+     rope([[g.P[0]+30,O[1]],[O[0]+380,O[1]]]);circ(O[0]+384,O[1],5);paint(C.part,C.ink);
+     label('SCROLL GEAR · the pinion’s carriage slides along the guide as the radius grows',400,470,'center');label('band pulls the carriage toward the scroll',O[0]+300,O[1]+52);},
+   reads(){const g=this.g;return[['Driving radius',`${g.r.toFixed(0)} mm`],['Pinion speed',`${(g.r/rp).toFixed(2)} × scroll`],['Teeth on the scroll',`${nT}`]];}});
+ aliasObj(414,SIMS_NEW[191],{concept:true});}
+
+/* 196 · pinion B on a fixed axis; the arm swings about the same axis and carries wheel A, which meshes with B.
+   A crank pin on A is tied to a fixed point by a rod, so as B turns the arm is pushed to and fro irregularly. */
+reg({num:196,outLabel:'Arm angle, degrees',G:[300,300],F:[600,120],rB:40,ZB:16,rA:80,ZA:32,e:46,Lr:300,
+  reset(){this.al=null;},
+  at(phi,al){const d=this.rB+this.rA,q=this.rB/this.rA,G=this.G,C=[G[0]+d*Math.cos(al),G[1]+d*Math.sin(al)],tA=al-q*(phi-al)+PI-PI/this.ZA,pin=[C[0]+this.e*Math.cos(tA),C[1]+this.e*Math.sin(tA)];return{C,tA,pin};},
+  update(phi){const F=this.F,f=al=>{const p=this.at(phi,al).pin;return Math.hypot(p[0]-F[0],p[1]-F[1])-this.Lr;};
+    if(this.al===null){let best=null;for(let i=0;i<720;i++){const a=-PI+i/720*TAU,v=Math.abs(f(a));if(best===null||v<best[1])best=[a,v];}this.al=best[0];}
+    let al=this.al;for(let it=0;it<30;it++){const v=f(al),d=(f(al+1e-5)-f(al-1e-5))/2e-5;if(Math.abs(d)<1e-9)break;let st=v/d;st=Math.max(-0.1,Math.min(0.1,st));al-=st;if(Math.abs(st)<1e-10)break;}
+    this.al=al;const z=this.at(phi,al);this.g={phi,al,...z,ang:al};},
+  output(){return this.g.ang*180/PI;},
+  draw(){const g=this.g,G=this.G,F=this.F;bar(G[0],G[1],g.C[0],g.C[1],22,C.part);
+    drawGear(g.C[0],g.C[1],this.rA,this.ZA,g.tA,C['steel-fill'],{bore:6});drawGear(G[0],G[1],this.rB,this.ZB,g.phi,C['brass-fill'],{bore:5});
+    bar(g.pin[0],g.pin[1],F[0],F[1],9,C.part2);pivot(g.pin[0],g.pin[1],4);pivot(g.C[0],g.C[1],5);pivot(G[0],G[1],6);pivot(F[0],F[1],5);ground(F[0],F[1]-10,40,true);
+    label('PINION B (fixed axis) · ARM swings about the same axis carrying WHEEL A',400,470,'center');label('rod from A’s crank pin to a fixed point',F[0]-10,F[1]+34,'right');},
+  reads(){return[['Arm',`${(this.g.ang*180/PI).toFixed(0)}°`],['Ratio','A turns half as fast as B, relative to the arm']];}});
+
+/* 198 · Brown: a modification of 197. The pinion turns but does not rise and fall. The rack (a row of pins) is jointed to the
+   main frame by two parallel rods, so when the pinion comes to the end it lifts the rack by its own movement and follows on the other side. */
+reg({num:198,outLabel:'Frame travel, mm',Pc:[400,210],rp:22,Z:9,n:21,Lr:80,yh:70,
+  update(phi){const rp=this.rp,p=TAU*rp/this.Z,Ls=(this.n-1)*p,Pp=2*Ls+TAU*rp,s=mod(rp*phi,Pp);let c;
+    if(s<Ls)c=[s,-rp];else if(s<Ls+PI*rp){const u=(s-Ls)/rp;c=[Ls+rp*Math.sin(u),-rp*Math.cos(u)];}else if(s<2*Ls+PI*rp)c=[Ls-(s-Ls-PI*rp),rp];else{const u=(s-2*Ls-PI*rp)/rp;c=[-rp*Math.sin(u),rp*Math.cos(u)];}
+    const B=[this.Pc[0]-c[0],this.Pc[1]-c[1]],sb=-c[1]/this.Lr,cb=Math.sqrt(1-sb*sb),fx=B[0]-this.Lr*cb;this.g={phi,c,B,p,Ls,fx,sb,cb,a:phi+PI/2-PI/this.Z};},
+  output(){return this.g.fx-(this.Pc[0]-this.Lr);},
+  draw(){const g=this.g,P=this.Pc,yh=this.yh,yf=P[1]+yh,Lr=this.Lr,B=g.B;
+    ctx.beginPath();ctx.rect(g.fx-60,yf+8,g.Ls+120,26);paint(C.part2,C.ink);
+    ctx.beginPath();ctx.rect(B[0]-24,B[1]-14,g.Ls+48,yh+22);paint(C['steel-fill'],C.ink);for(let k=0;k<this.n;k++){circ(B[0]+k*g.p,B[1],3.6);paint(C.part,C.ink);}
+    for(const x0 of [40,g.Ls-40]){const Bp=[B[0]+x0,B[1]+yh],Fp=[Bp[0]-Lr*g.cb,yf];ctx.beginPath();ctx.rect(Fp[0]-8,yf,16,10);paint(C.part2,C.ink);bar(Fp[0],Fp[1],Bp[0],Bp[1],8,C['brass-fill']);pivot(Fp[0],Fp[1],3);pivot(Bp[0],Bp[1],3);}
+    for(const x of [270,340]){ctx.beginPath();ctx.rect(x,yf+36,50,10);paint(C.part,C.ink);}
+    drawGear(P[0],P[1],this.rp,this.Z,g.a,C['brass-fill'],{bore:4});pivot(P[0],P[1],4);
+    label('PINION TURNS ON A FIXED AXIS · the rack swings up or down on its rods to change sides',400,480,'center');label('FRAME slides in guides',300,yf+64,'center');},
+  reads(){const g=this.g;return[['Pinion side',g.c[1]<0?'above the pins':'below the pins'],['Rack lifted',`${(-g.c[1]).toFixed(0)} mm`],['Frame',`${(g.fx-(this.Pc[0]-this.Lr)).toFixed(0)} mm`]];}});
+
+/* 208 · pin wheel with three rings of pins at exactly the pinion's pitch; the slotted pinion slides along its shaft (lying across the wheel face) to any ring */
+reg({num:208,outLabel:'Pinion turns',Rk:[72,108,148],rp:24,Zp:6,params:[{id:'k',label:'Pin ring',min:1,max:3,step:1,value:2,fmt:v=>['inner','middle','outer'][v-1]}],
+  update(phi){const R=this.Rk[this.P.k-1];this.g={phi,R,pa:-phi*R/this.rp};},output(){return this.g.pa/TAU;},
+  draw(){const g=this.g,O=[340,265];circ(O[0],O[1],170);paint(C['brass-fill'],C.ink);for(const R of this.Rk){const n=Math.round(R/4);for(let i=0;i<n;i++){const t=g.phi+i*TAU/n;circ(O[0]+R*Math.cos(t),O[1]+R*Math.sin(t),3.6);paint(R===g.R?C.part2:C.part,C.ink,.8);}}pivot(O[0],O[1],6);
+    ctx.beginPath();ctx.rect(O[0]+40,O[1]-8,400,16);paint(C.part,C.ink);ctx.save();ctx.translate(O[0]+g.R,O[1]);ctx.beginPath();ctx.rect(-10,-this.rp-5,20,2*this.rp+10);ctx.fillStyle=C['steel-fill'];ctx.fill();ctx.strokeStyle=C.ink;ctx.lineWidth=1.2;ctx.stroke();
+    for(let k=0;k<this.Zp;k++){const a=g.pa+k*TAU/this.Zp;if(Math.cos(a)>0){ctx.globalAlpha=.3+.6*Math.cos(a);ctx.beginPath();ctx.rect(-10,(this.rp+5)*Math.sin(a)-3,20,6);ctx.fillStyle=C.ink;ctx.fill();}}ctx.restore();
+    label('SLOTTED PINION ON A SQUARE SHAFT · slide it to another ring of pins',560,O[1]-40);},
+  reads(){const R=this.g.R;return[['Pin ring',`${R} mm, ${Math.round(R/4)} pins`],['Pinion speed',`${(R/this.rp).toFixed(2)} × wheel`]];}});
+
+/* 211 · Geneva drive: pin on the driver, four slots, curved locking rim between steps */
+lockTooth(211,{N:4});
+
+/* 216 · Brown: slow forward, quick return. The driving wheel carries an outside part-gear (24 teeth of a 40, 216°) and an inside
+   part-ring (24 teeth of a 60, 144°). The pinion meets the outside teeth first (slow, reversed) then the inside teeth (fast, same way). */
+reg({num:216,outLabel:'Pinion angle, degrees',O:[330,265],R1:96,Z1:40,R2:144,Z2:60,rp:24,Zp:10,
+  geo(){if(!this._g){const p1=TAU/this.Z1,p2=TAU/this.Z2,a1=24*p1;this._g={a1,ext:sectorExt(this.R1,this.Z1,TAU-a1+p1*0.5,TAU-p1*0.5),int:sectorInt(this.R2,this.Z2,p2*0.5,TAU-a1-p2*0.5,this.R2+22)};}return this._g;},
+  update(phi){const G=this.geo(),u=mod(phi,TAU),k=Math.floor(phi/TAU);let a;const b=PI+PI/this.Zp;
+    if(u<G.a1)a=-u*this.Z1/this.Zp+b;else a=-G.a1*this.Z1/this.Zp+b+(u-G.a1)*this.Z2/this.Zp;this.g={phi,a,fwd:u<G.a1};},
+  output(){return(this.g.a-PI-PI/this.Zp)*180/PI;},
+  draw(){const g=this.g,O=this.O,G=this.geo(),P=[O[0]+this.R1+this.rp,O[1]];circ(O[0],O[1],this.R2+22);paint(C.part,C.ink);
+    polyAt(G.int,O[0],O[1],g.phi);paint(C['steel-fill'],C.ink);polyAt(G.ext,O[0],O[1],g.phi);circ(O[0],O[1],8,false);paint(C['brass-fill'],C.ink);pivot(O[0],O[1],6);
+    drawGear(P[0],P[1],this.rp,this.Zp,g.a,C.hi,{bore:4});pivot(P[0],P[1],4);const t=g.a;bar(P[0],P[1],P[0]+16*Math.cos(t),P[1]+16*Math.sin(t),3,C.ink);
+    label(g.fwd?'SLOW FORWARD · outside teeth turn the pinion backward slowly':'QUICK RETURN · inside teeth turn it the other way, faster',400,470,'center');},
+  reads(){return[['Phase',this.g.fwd?'slow forward (216° of the wheel)':'quick return (144°)'],['Pinion swing','2.4 turns each way']];}});
+
+/* 219 · off-centre crown wheel: exact contact radius where the pin circle crosses the pinion's line */
+{const m=SIMS_NEW[219];m.update=function(phi){const e=40,r=e*Math.cos(phi)+Math.sqrt(130*130-e*e*Math.sin(phi)**2);if(this.last===null)this.last=phi;this.pa-=(phi-this.last)*r/26;this.last=phi;this.g={phi,r,e};};}
+
+/* 223 · Brown: sectors on three planes; the change of speed follows their diameters. Driver sectors (radii 50, 70, 90, each 120°)
+   on one shaft mesh in turn with whole gears (110, 90, 70) on the other; all module 5, centre distance 160. */
+reg({num:223,outLabel:'Driven, turns',A:[290,265],B:[450,265],R1:[50,70,90],R2:[110,90,70],
+  geo(){if(!this._g){const T=TAU/3,Z1=this.R1.map(r=>r*2/5),Z2=this.R2.map(r=>r*2/5),sec=[],ph=[];
+      const a2=th=>this.a2(th);for(let k=0;k<3;k++){const p1=TAU/Z1[k];sec.push(sectorExt(this.R1[k],Z1[k],-(k+1)*T+p1*0.5,-k*T-p1*0.5,true));const ts=Math.ceil(k*T/p1+1e-9)*p1;ph.push(PI+PI/Z2[k]-a2(ts));}
+      this._g={T,Z1,Z2,sec,ph};}return this._g;},
+  a2(th){const T=TAU/3,r=[0,1,2].map(k=>this.R1[k]/this.R2[k]),per=T*(r[0]+r[1]+r[2]),n=Math.floor(th/TAU),u=th-n*TAU;let a=n*per;for(let k=0;k<3;k++){const d=Math.max(0,Math.min(T,u-k*T));a+=d*r[k];}return -a;},
+  update(phi){this.g={phi,a2:this.a2(phi),k:Math.min(2,Math.floor(mod(phi,TAU)/(TAU/3)))};},
+  output(){return -this.g.a2/TAU;},
+  draw(){const g=this.g,A=this.A,B=this.B,G=this.geo(),cols=[C.part,C['steel-fill'],C['brass-fill']];
+    for(let k=0;k<3;k++){drawGear(B[0],B[1],this.R2[k],G.Z2[k],g.a2+G.ph[k],k===g.k?C.hi:C.part2,{bore:6});}
+    for(let k=0;k<3;k++){polyAt(G.sec[k],A[0],A[1],g.phi);paint(k===g.k?C.hi:cols[k],C.ink);}
+    circ(A[0],A[1],8,false);pivot(A[0],A[1],6);pivot(B[0],B[1],6);label('THREE SECTORS ON THREE PLANES · each meshes for a third of a turn',400,460,'center');label('driven speed steps through 0.45, 0.78, 1.29 × driver',400,480,'center');},
+  reads(){const k=this.g.k;return[['Active pair',`${k+1} of 3 (${this.R1[k]} on ${this.R2[k]})`],['Ratio now',`${(this.R1[k]/this.R2[k]).toFixed(2)}`]];}});
+
+/* 195 · worm between two worm wheels: the wheels sit above and below the worm, so they turn opposite ways; feed rolls on the
+   same shafts (behind the wheels) are as large as the wheels' centre spacing allows, so they meet and draw the stock through */
+reg({num:195,outLabel:'Feed rolls, turns',concept:true,Zw:30,rw:72,rp:18,
+  update(phi){this.g={phi,w:phi/this.Zw};},output(){return this.g.w/TAU;},
+  draw(){const g=this.g,X=400,y=265,d=this.rw+this.rp,R=d-2;
+    for(const s of [-1,1]){circ(X,y+s*d,R);paint(C['brass-fill'],C.ink,1);ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle=C.muted;circ(X,y+s*d,R-14,false);ctx.stroke();ctx.restore();}
+    ctx.beginPath();ctx.rect(120,y-3,560,6);paint(C.hi,C.ink,0.8);dashFlow&&dashFlow([[130,y],[670,y]],-g.w*R,3);
+    for(const s of [-1,1]){drawGear(X,y+s*d,this.rw,this.Zw,s*g.w+(s>0?PI/this.Zw:0),C['steel-fill'],{bore:7});pivot(X,y+s*d,6);}
+    screwShaft(X-130,X+130,y,this.rp,g.phi,16);
+    label('WORM BETWEEN TWO WORM WHEELS',400,30,'center');label('feed rolls (behind) on the wheel shafts grip the stock',400,500,'center');},
+  reads(){return[['Ratio',`${this.Zw} : 1 to each roll`],['Rolls','turn opposite ways, so the stock is drawn through']];}});
+
+/* 212 · Geneva stop: the arbor's finger works a five-place star whose fifth slot is left blank, so after four steps the finger
+   meets the solid rim and the winding stops; the round rim on the arbor locks the star in a hollow between steps */
+{const N=5,d=150,r=d*Math.sin(PI/N),pr=8,RL=r-pr-6;
+ const genevaStop=()=>{const w=genevaWheel(N,d,pr,RL),Ro=w.Ro,sl=pr+1.5,rin=w.rin,M=N*96,rim=[];
+   for(let i=0;i<M;i++){const t=i/M*TAU;let R=Ro;const jh=Math.round((t-PI-PI/N)/(TAU/N)),ch=PI+PI/N+jh*TAU/N,cx=d*Math.cos(ch),cy=d*Math.sin(ch),ux=Math.cos(t),uy=Math.sin(t);
+     if(Math.hypot(R*ux-cx,R*uy-cy)<RL+1){const b=ux*cx+uy*cy,c=cx*cx+cy*cy-(RL+1)**2,disc=b*b-c;if(disc>0)R=Math.min(R,b-Math.sqrt(disc));}rim.push([t,R]);}
+   const out=[],hs=Math.asin(sl/Ro),rot=(x,y,a)=>[x*Math.cos(a)-y*Math.sin(a),x*Math.sin(a)+y*Math.cos(a)];
+   for(let j=0;j<N;j++){const c=PI+j*TAU/N;if(j<N-1){out.push(rot(Ro,-sl,c),rot(rin,-sl,c));for(let k=1;k<8;k++){const q=-PI/2+k*PI/8;out.push(rot(rin-sl*Math.cos(q),sl*Math.sin(q),c));}out.push(rot(rin,sl,c),rot(Ro,sl,c));}
+     const a0=j<N-1?c+hs:c-hs,span=j<N-1?TAU/N-2*hs:TAU/N;const seg=rim.map(([t,R])=>[mod(t-a0,TAU),R]).filter(q=>q[0]>0&&q[0]<span).sort((x,y)=>x[0]-y[0]);for(const [u,R] of seg)out.push([R*Math.cos(a0+u),R*Math.sin(a0+u)]);}
+   return{pts:out,Ro};};
+ const be=PI/2-PI/N,amin=-TAU+be+0.12,amax=4*TAU-be-0.12;
+ const o=reg({num:212,outLabel:'Arbor turns',N,d,r,pr,RL,lock:true,Ro:Math.sqrt(d*d-r*r)+2,D:[320,262],Wc:[320+d,262],
+   wheel(){if(!this._w)this._w=genevaStop();return this._w;},
+   update(phi){const a=amin+(amax-amin)*(1-Math.cos(phi*0.25))/2,k=genevaKin(a,N);this.g={phi,a,w:k.gam,eng:k.eng,turns:(a-amin)/TAU};},output(){return this.g.turns;},
+   draw(){const g=this.g,D=this.D,Wc=this.Wc,w=this.wheel(),c=Math.cos(g.w),s=Math.sin(g.w);poly(w.pts.map(([x,y])=>[Wc[0]+x*c-y*s,Wc[1]+x*s+y*c]));ctx.closePath();circ(Wc[0],Wc[1],7,false);paint(C['steel-fill'],C.ink);pivot(Wc[0],Wc[1],5);
+     const t=g.a,ct=Math.cos(t),st=Math.sin(t),T=([x,y])=>[D[0]+x*ct-y*st,D[1]+x*st+y*ct];poly(lockDiskPts(RL,d,w.Ro+4).map(T));ctx.closePath();paint(C['brass-fill'],C.ink);
+     poly([[-10,-12],[r-4,-9],[r-4,9],[-10,12]].map(T));ctx.closePath();paint(C['brass-fill'],C.ink);const P=T([r,0]);circ(P[0],P[1],pr);paint(C.part2,C.ink);pivot(D[0],D[1],5);
+     const stop=g.a<amin+0.05||g.a>amax-0.05;label(stop?'STOPPED · the finger meets the blank place on the star':g.eng?'FINGER IN A SLOT · star moves one place':'STAR LOCKED by the arbor’s rim',400,470,'center');label('WINDING ARBOR',D[0]-60,D[1]+110,'center');label('STAR (one place blank)',Wc[0]+60,Wc[1]+120,'center');},
+   reads(){return[['Arbor turns',`${this.g.turns.toFixed(2)} of ${((amax-amin)/TAU).toFixed(1)}`],['Star places used','4 of 5']];}});
+ for(const n of [213,214,215])aliasObj(n,o,{concept:true});}
+
+/* 224 · expanding pulley: six arms slide in radial guides; a plate with six curved slots turns on the hub, and the arms' studs
+   in the slots move them out or in together. Clamp the plate and the pulley keeps its new size. */
+{const m=SIMS_NEW[224];m.draw=function(){const g=this.g,A=[300,260],B=[620,260],U=0.8,psi=-U*(g.r-60)/45;drawBelt(beltPath(A[0],A[1],g.r+6,B[0],B[1],60,false),g.r*g.phi,6);
+   circ(A[0],A[1],96);paint(C.part,C.ink);const c=Math.cos(g.phi+psi),s=Math.sin(g.phi+psi);
+   for(let k=0;k<6;k++){const pts=[];for(let i=0;i<=20;i++){const u=i/20*U,rr=25+45*u/U,t=k*PI/3+u;pts.push([rr*Math.cos(t),rr*Math.sin(t)]);}ctx.save();ctx.lineCap='round';ctx.strokeStyle=C.ink;ctx.lineWidth=11;poly(pts.map(([x,y])=>[A[0]+x*c-y*s,A[1]+x*s+y*c]));ctx.stroke();ctx.strokeStyle=C.sheet;ctx.lineWidth=8.5;ctx.stroke();ctx.restore();}
+   for(let k=0;k<6;k++){const a=g.phi+k*PI/3,ca=Math.cos(a),sa=Math.sin(a),rs=g.r-35;bar(A[0]+(rs-10)*ca,A[1]+(rs-10)*sa,A[0]+(g.r-8)*ca,A[1]+(g.r-8)*sa,10,C.part2);ctx.save();ctx.translate(A[0]+g.r*ca,A[1]+g.r*sa);ctx.rotate(a);ctx.beginPath();ctx.rect(-4,-20,10,40);paint(C['brass-fill'],C.ink);ctx.restore();circ(A[0]+rs*ca,A[1]+rs*sa,4);paint(C.ink,null);}
+   pivot(A[0],A[1],6);pulley(B[0],B[1],60,g.phi*(g.r+6)/60,C['steel-fill']);label('TURN THE SLOTTED PLATE ON THE HUB: the studs ride the curved slots and the arms slide out',330,450,'center');};}
+
+/* 227–229 · chain on pocketed pulleys, drawn on the same layout as the 3D model: pitch 22, eight pockets, centres 14 pitches apart */
+for(const n of [227,228,229]){const m=SIMS_NEW[n];if(!m)continue;const alt=n!==229;
+ m.draw=function(){const g=this.g,p=22,Np=8,R=p*Np/PI,D=14*p,A=[400-D/2,260],B=[400+D/2,260],Lt=2*D+TAU*R,N=Math.round(Lt/p),step=alt?2:1,pk=step*p/R,cB=-PI/2+(p/2-D)/R,cA=PI/2+(p/2-2*D-PI*R)/R;
+   const at=s=>{s=mod(s,Lt);if(s<D)return[A[0]+s,A[1]-R];if(s<D+PI*R){const t=-PI/2+(s-D)/R;return[B[0]+R*Math.cos(t),B[1]+R*Math.sin(t)];}if(s<2*D+PI*R)return[B[0]-(s-D-PI*R),B[1]+R];const t=PI/2+(s-2*D-PI*R)/R;return[A[0]+R*Math.cos(t),A[1]+R*Math.sin(t)];};
+   for(const [P,c0,f] of [[A,cA,C['brass-fill']],[B,cB,C.part]]){const pts=[];const M=Np*step*24;for(let i=0;i<M;i++){const t=i/M*TAU,k=Math.round((t-c0)/pk),dt=Math.abs(t-c0-k*pk)*R,r=dt<0.75*p?R-9:R-6;pts.push([r*Math.cos(t),r*Math.sin(t)]);}polyAt(pts,P[0],P[1],g.s/R);circ(P[0],P[1],7,false);paint(f,C.ink);pivot(P[0],P[1],6);}
+   ctx.save();ctx.lineCap='round';for(let i=0;i<N;i++){const q0=at(i*p+g.s),q1=at(i*p+p+g.s),c=[(q0[0]+q1[0])/2,(q0[1]+q1[1])/2],a=Math.atan2(q1[1]-q0[1],q1[0]-q0[0]),h=0.7*p;
+     ctx.save();ctx.translate(c[0],c[1]);ctx.rotate(a);if(alt&&i%2){ctx.beginPath();ctx.rect(-h,-2.6,2*h,5.2);paint(C['steel-fill'],C.ink,1);}else{ctx.beginPath();ctx.rect(-h,-7.5,2*h,15);ctx.rect(-h+5,-2.5,2*h-10,5);paint(C.steel,C.ink,1);}ctx.restore();}ctx.restore();
+   label(alt?'LINKS IN ALTERNATE PLANES · flat links lie in the pockets, upright links ride over the rim':'FLAT-LINK CHAIN · every link lies in a pocket',400,400,'center');};}
+
+/* ================= audit pass 231–270 ================= */
+/* 233 · two stops for a lantern wheel (20 staves). (a) a 12-tooth pinion meshing with the staves has one tooth space filled:
+   after eleven staves the filled space meets a stave and the wheel stops. (b) a stud on the wheel strikes a fixed finger. */
+reg({num:233,outLabel:'Lantern wheel, turns',O:[330,265],R:100,Ns:20,Zp:12,params:[{id:'m',type:'toggle',label:'Stop',options:[[0,'Filled tooth space'],[1,'Stud and finger']],value:0}],
+  lim(){const p=TAU/this.Ns;return this.P.m===0?[-0.42*p,10.42*p]:[-PI+0.32,PI-0.32];},
+  update(phi){const [a0,a1]=this.lim(),a=a0+(a1-a0)*(1-Math.cos(phi*0.4))/2;this.g={phi,a,a0,a1};},output(){return this.g.a/TAU;},
+  draw(){const g=this.g,O=this.O,R=this.R,Ns=this.Ns,Zp=this.Zp,rp=Zp*R/Ns,P=[O[0]+R+rp,O[1]];
+    circ(O[0],O[1],R+18);circ(O[0],O[1],R-18,false);paint(C.part,C.ink);for(let i=0;i<Ns;i++){const t=g.a+i*TAU/Ns;circ(O[0]+R*Math.cos(t),O[1]+R*Math.sin(t),5.5);paint(C.part2,C.ink);}
+    circ(O[0],O[1],R-18);paint(C['steel-fill'],C.ink);pivot(O[0],O[1],6);
+    if(this.P.m===0){const b=PI-PI/Zp-g.a*Ns/Zp;drawGear(P[0],P[1],rp,Zp,b,C['brass-fill'],{bore:5});const tb=b+PI/Zp+TAU/Zp*11;/* the filled space */
+      const m=2*rp/Zp;ctx.beginPath();ctx.arc(P[0],P[1],rp+m*0.9,tb-PI/Zp*0.9,tb+PI/Zp*0.9);ctx.arc(P[0],P[1],rp-1.25*m,tb+PI/Zp*0.9,tb-PI/Zp*0.9,true);ctx.closePath();paint(C.brass,C.ink);pivot(P[0],P[1],5);
+      label('PINION WITH ONE SPACE FILLED',P[0],P[1]+rp+40,'center');}
+    else{const s=[O[0]+(R-40)*Math.cos(g.a),O[1]+(R-40)*Math.sin(g.a)];circ(s[0],s[1],9);paint(C.brass,C.ink);const F=[O[0]-R+10,O[1]];ctx.beginPath();ctx.rect(F[0]-80,F[1]-7,96,14);paint(C['brass-fill'],C.ink);pivot(F[0]-70,F[1],5);ground(F[0]-70,F[1]+10,30);label('FIXED FINGER',F[0]-60,F[1]-20,'center');label('STUD',s[0]+12,s[1]-10);}
+    const stop=g.a<g.a0+0.02||g.a>g.a1-0.02;label(stop?'STOPPED':'TURNING',O[0],O[1]+R+50,'center');},
+  reads(){const g=this.g;return[['Turns made',`${((g.a-g.a0)/TAU).toFixed(2)}`],['Free travel',`${((g.a1-g.a0)/TAU).toFixed(2)} turn`]];}});
+
+/* 252 · two slanted slots in the slide, kept inside the plate; each roller's rod is guided straight, so both move in or out equally */
+{const m=SIMS_NEW[252];m.draw=function(){const g=this.g,X=400+g.x,y=270,k=0.5;ctx.beginPath();ctx.rect(X-160,y-130,320,260);paint(C['steel-fill'],C.ink);
+  for(const s of [-1,1]){const p0=[X-130,y+s*(60-k*130*0)],a=s*Math.atan(k);ctx.save();ctx.translate(X,y+s*60);ctx.rotate(-s*Math.atan(k));ctx.beginPath();ctx.rect(-140,-10,280,20);ctx.restore();ctx.fillStyle=C.sheet;ctx.fill();ctx.strokeStyle=C.ink;ctx.lineWidth=1;ctx.stroke();}
+  for(const s of [-1,1]){const yy=y+s*(60+(-g.x)*k);circ(400,yy,10);paint(C.hi,C.ink);bar(400,yy,400,y+s*230,10,C.part);ctx.beginPath();ctx.rect(386,y+s*200-10,28,20);paint(C.part2,C.ink);}
+  bar(X+160,y,760,y,10,C.part);label('SLANTED SLOTS MOVE BOTH ROLLERS EQUALLY',600,60,'center');};
+ m.update=function(phi){const x=80*Math.sin(phi);this.g={phi,x,s:60-x*0.5};};}
+
+
+/* 260 · Brown: a differential screw worked by two wheels running at slightly different speeds. A countershaft carries two equal
+   pinions; one drives a 20-tooth wheel fixed on the screw, the other a 21-tooth wheel on the nut. Screw and nut turn nearly together,
+   so the nut creeps along the screw by only 1/21 of a pitch for each turn of the screw. */
+reg({num:260,outLabel:'Nut travel, mm',concept:true,p:16,
+  update(phi){const ts=phi,tn=phi*20/21,x=this.p*(ts-tn)/TAU;this.g={phi,ts,tn,x};},output(){return this.g.x;},
+  draw(){const g=this.g,y=330,x0=140,x1=660,X=380+g.x*6;screwShaft(x0,x1,y,18,g.ts,this.p);ctx.beginPath();ctx.rect(x0-30,y-30,22,60);ctx.rect(x1+8,y-30,22,60);paint(C.part2,C.ink);
+    drawGear(x0+40,y,60,20,g.ts,C['brass-fill'],{bore:6});ctx.beginPath();ctx.rect(X-40,y-26,80,52);paint(C['steel-fill'],C.ink);drawGear(X+60,y,60,21,g.tn,C['steel-fill'],{bore:6});
+    const yc=y-84;bar(x0,yc,x1,yc,8,C.part);drawGear(x0+40,yc,24,8,-g.ts*20/8+PI/8,C.part,{bore:4});ctx.beginPath();ctx.rect(X-10,yc-24,140,48);paint(C.part,C.ink);drawGear(X+60,yc,24,8,-g.tn*21/8+PI/8,C.part,{bore:4});
+    label('TWO EQUAL PINIONS ON THE COUNTERSHAFT',400,60,'center');label('20 teeth on the screw · 21 on the nut',400,80,'center');label('NUT creeps 1/21 pitch per turn',X,y+60,'center');},
+  reads(){const g=this.g;return[['Screw turns',`${(g.ts/TAU).toFixed(2)}`],['Nut turns',`${(g.tn/TAU).toFixed(2)}`],['Nut travel',`${g.x.toFixed(2)} mm`]];}});
+
+/* 239 · stops for a spur gear: (a) a stud on the wheel strikes a fixed stop; (b) the pinion has one tooth space filled, so the
+   wheel can turn only as far as the pinion's other spaces allow */
+reg({num:239,outLabel:'Wheel angle, degrees',A:[300,265],RA:100,ZA:40,rB:40,ZB:16,params:[{id:'m',type:'toggle',label:'Stop',options:[[0,'Stud and fixed stop'],[1,'Filled space in the pinion']],value:0}],
+  lim(){const p=TAU/this.ZA;return this.P.m===0?[-PI+0.26,PI-0.26]:[-0.42*p,14.42*p];},
+  update(phi){const [a0,a1]=this.lim(),a=a0+(a1-a0)*(1-Math.cos(phi*0.4))/2;this.g={phi,a,a0,a1};},output(){return this.g.a*180/PI;},
+  draw(){const g=this.g,A=this.A,RA=this.RA,ZA=this.ZA,rB=this.rB,ZB=this.ZB,B=[A[0]+RA+rB,A[1]],b=PI-PI/ZB-g.a*ZA/ZB;
+    drawGear(A[0],A[1],RA,ZA,g.a,C['brass-fill'],{bore:6});drawGear(B[0],B[1],rB,ZB,b,C['steel-fill'],{bore:5});pivot(A[0],A[1],6);pivot(B[0],B[1],5);
+    if(this.P.m===0){const s=[A[0]+66*Math.cos(g.a+PI),A[1]+66*Math.sin(g.a+PI)];circ(s[0],s[1],9);paint(C.part2,C.ink);const F=[A[0]+66,A[1]];ctx.beginPath();ctx.rect(F[0]-8,F[1]-8,16,16);paint(C.part,C.ink);label('FIXED STOP',F[0],F[1]-16,'center');}
+    else{const tb=b+PI/ZB+TAU/ZB*15,m=2*rB/ZB;ctx.beginPath();ctx.arc(B[0],B[1],rB+m*0.9,tb-PI/ZB*0.9,tb+PI/ZB*0.9);ctx.arc(B[0],B[1],rB-1.25*m,tb+PI/ZB*0.9,tb-PI/ZB*0.9,true);ctx.closePath();paint(C.steel,C.ink);}
+    const stop=g.a<g.a0+0.02||g.a>g.a1-0.02;label(stop?'STOPPED':(this.P.m===0?'STUD ON THE WHEEL · fixed stop on the frame':'PINION WITH ONE SPACE FILLED'),400,470,'center');},
+  reads(){const g=this.g;return[['Wheel',`${(g.a*180/PI).toFixed(0)}°`],['Free travel',`${((g.a1-g.a0)*180/PI).toFixed(0)}°`]];}});
+
+/* 269 · Brown: continued rectilinear movement of the frame with mutilated racks gives an alternate rotary motion to the spur-gear.
+   The frame's racks are cut in short lengths, upper and lower in turn; the frame moves steadily one way and the gear turns back and forth. */
+reg({num:269,outLabel:'Gear angle, degrees',concept:true,P0:[400,270],rp:50,m:5,seg:8,nseg:4,
+  geo(){const p=PI*this.m,L=this.seg*p;return{p,L,T:this.nseg*L};},
+  update(phi){const G=this.geo(),s=G.T*(1-Math.cos(phi*0.25))/2,k=Math.floor(s/G.L),u=s-k*G.L,a=(k%2===0?-u:-(G.L-u))/this.rp;this.g={phi,s,a,top:k%2===0};},
+  output(){return this.g.a*180/PI;},
+  draw(){const g=this.g,G=this.geo(),P=this.P0,rp=this.rp,m=this.m,H=rp+1.25*m,X0=P[0]-g.s;/* frame-local x=0 at X0 */
+    ctx.beginPath();ctx.rect(X0-rp-40,P[1]-H-30,G.T+2*rp+80,2*H+60);ctx.rect(X0-rp-30,P[1]-H,G.T+2*rp+60,2*H);paint(C['steel-fill'],C.ink);
+    for(let k=0;k<G.T/G.L;k++){const top=k%2===0,x0=X0+k*G.L-G.L/2+(top?G.L/2:G.L/2),xa=X0+k*G.L,xb=xa+G.L;const y=top?P[1]-H:P[1]+H,dir=top?1:-1,pts=rackTeeth(xa,xb,X0+G.p/2,G.p,y+dir*1.25*m,m,top);poly([[xa,y],...pts,[xb,y]]);ctx.closePath();paint(C['steel-fill'],C.ink,.9);}
+    drawGear(P[0],P[1],rp,20,g.a,C['brass-fill'],{bore:6});pivot(P[0],P[1],5);
+    label('FRAME MOVES STEADILY ONE WAY · upper and lower part-racks turn the gear back and forth',400,490,'center');label(g.top?'UPPER RACK IN MESH':'LOWER RACK IN MESH',400,40,'center');},
+  reads(){return[['In mesh',this.g.top?'upper rack':'lower rack'],['Frame travel',`${this.g.s.toFixed(0)} mm`]];}});
+
+/* ================= audit pass 271–320 (non-escapement) ================= */
+/* 271 · rocking lever with two pawls hinged on its cross-arm; both pawls lean the same way, so the one whose hinge is going down
+   pushes the bar on while the other slides back over the teeth: the bar moves on both strokes */
+reg({num:271,outLabel:'Bar travel, mm',Pv:[400,150],arm:70,Lp:200,yt:312,p:24,
+  reset(){this.X=0;this.last=null;},
+  tips(a){return[-1,1].map(s=>{const pv=[this.Pv[0]+s*this.arm*Math.cos(a),this.Pv[1]-s*this.arm*Math.sin(a)],dy=this.yt-pv[1];return{s,pv,tip:[pv[0]+Math.sqrt(this.Lp*this.Lp-dy*dy),this.yt]};});},
+  update(phi){const a=0.32*Math.sin(phi),T=this.tips(a);if(this.last){let d=0,eng=0;for(let i=0;i<2;i++){const dd=T[i].tip[0]-this.last[i].tip[0];if(dd>d){d=dd;eng=T[i].s;}}this.X+=d;this.eng=eng||this.eng;}this.last=T;this.g={phi,a,T};},
+  output(){return this.X;},
+  draw(){const g=this.g,P=this.Pv,p=this.p,y=this.yt+9,sh=mod(this.X,p);const pts=[];for(let x=-p;x<=800+p;x+=p){const xx=x+sh;pts.push([xx,y],[xx,y-18],[xx+p-2,y-1]);}poly([[0,y+30],...pts.filter(q=>q[0]>=-30&&q[0]<=830),[800,y+30]]);ctx.closePath();paint(C['steel-fill'],C.ink);
+    bar(P[0],P[1],P[0]-150*Math.sin(g.a),P[1]-150*Math.cos(g.a),16,C['brass-fill']);const A=[P[0]+this.arm*Math.cos(g.a),P[1]-this.arm*Math.sin(g.a)],B=[P[0]-this.arm*Math.cos(g.a),P[1]+this.arm*Math.sin(g.a)];bar(A[0],A[1],B[0],B[1],12,C['brass-fill']);
+    for(const t of g.T){const eng=t.s===this.eng;bar(t.pv[0],t.pv[1],t.tip[0],t.tip[1],8,eng?C.part2:C.part);pivot(t.pv[0],t.pv[1],4);}
+    pivot(P[0],P[1],6);ground(P[0],P[1]-12,40,true);label('RATCHET BAR',60,y+50);label('ROCKING LEVER WITH TWO PAWLS · the pawl going down pushes',P[0]+90,P[1]-30);},
+  reads(){return[['Bar moved',`${this.X.toFixed(0)} mm`],['Pushing pawl',this.eng>0?'right':'left'],['Strokes used','both']];}});
+
+/* 275 · worm drives the rack: rack teeth sit in the worm's thread; the worm turns back and forth so the rack runs to and fro */
+{const m=SIMS_NEW[275];m.update=function(phi){const x=110*Math.sin(phi/10);this.g={phi,x,wa:x/20*TAU,w:0};};m.output=function(){return this.g.x;};
+ m.draw=function(){const g=this.g,y=330,x=400+g.x;ctx.beginPath();ctx.rect(x-200,y-58,400,26);paint(C['steel-fill'],C.ink);for(let i=0;i<20;i++){ctx.beginPath();ctx.moveTo(x-196+i*20,y-32);ctx.lineTo(x-188+i*20,y-32);ctx.lineTo(x-191+i*20,y-14);ctx.lineTo(x-193+i*20,y-14);ctx.closePath();paint(C['steel-fill'],C.ink,.8);}
+   screwShaft(250,550,y,22,g.wa,20);ctx.beginPath();ctx.rect(236,y-26,14,52);ctx.rect(550,y-26,14,52);paint(C.part2,C.ink);label('WORM DRIVES THE RACK · one tooth per turn',400,490,'center');};}
+
+/* 286 · Brown: a curved toe on a rocking shaft lifts the valve rod. The shaft rocks; the toe's curved back rolls under the rod's foot. */
+camFlat(286,{r:t=>{const u=mod(t+PI/2-0.25+PI,TAU)-PI;return Math.abs(u)<1.1?36+64*Math.cos(u/1.1*PI/2)**1.5:36;},label:'CURVED TOE ON A ROCKING SHAFT LIFTS THE VALVE ROD'});
+{const m=SIMS_NEW[286],up=m.update;m.update=function(phi){up.call(this,0.55*Math.sin(phi)-0.15);this.g.phi=phi;};}
+
+/* 320 · Huygens' endless chain: one loop over the going pulley A (on the clock) and the winding pulley B (with a click). The loop
+   carries the driving weight's pulley in one bight and a small counterweight in the other. Pulling down the free side over B raises
+   the weight, yet A is still pulled round all the while, so the clock keeps going while it is wound. */
+{const m=SIMS_NEW[320];
+ m.update=function(phi){const T=TAU*2,u=mod(phi,T)/T,wind=u<0.25;const k=Math.floor(phi/T);const drop=wind?(1-u/0.25):(u-0.25)/0.75;/* 0..1 of the weight's travel */
+   this.g={phi,wind,go:phi*0.3,yW:300+90*drop,b:(k+(wind?u/0.25:1))*TAU*0.9};};
+ m.draw=function(){const g=this.g,A=[300,140],B=[500,140],r=50,yW=g.yW,yC=yW-70+140;/* counterweight moves opposite */
+   pulley(A[0],A[1],r,g.go,C['steel-fill']);pulley(B[0],B[1],r,g.b,C['brass-fill']);
+   const Wp=[A[0]+r,yW],Cp=[B[0]+r-24,780-yW];pulley(Wp[0],Wp[1],26,-g.go,C.part);pulley(Cp[0],Cp[1],22,g.b,C.part);
+   rope([[A[0]-r,A[1]],[A[0]-r,Cp[1]-60]]);rope([[A[0]-r,Cp[1]-60],[Cp[0]-22,Cp[1]]]);/* left strand to counterweight bight */
+   rope([[A[0]+r-26,A[1]+20],[Wp[0]-26,Wp[1]]]);rope([[B[0]-r,B[1]],[Wp[0]+26,Wp[1]]]);rope([[B[0]+r,B[1]],[Cp[0]+22,Cp[1]]]);
+   weight(Wp[0],Wp[1]+26,60,70,'WEIGHT');weight(Cp[0],Cp[1]+22,36,36,'');
+   label(g.wind?'WINDING · pull the cord over B: the weight rises, yet A is still driven':'GOING · the weight descends and drives A',400,500,'center');label('A · going pulley (clock)',A[0]-40,A[1]-64,'center');label('B · winding pulley with click',B[0]+40,B[1]-64,'center');};}
+
+/* 334 · the rack on the piston rod meshes with the toothed end of the beam: same module (5), rack moves R·θ */
+{const m=SIMS_NEW[334];m.draw=function(){const g=this.g,F=[460,200],R=150,md=5,p=PI*md,t=Math.tan(20*PI/180),x0=F[0]-R;ctx.save();ctx.translate(F[0],F[1]);ctx.rotate(g.a);ctx.beginPath();ctx.rect(-10,-12,280,24);paint(C['brass-fill'],C.ink);ctx.restore();
+  poly(gearPts(F[0],F[1],R,60,g.a+PI,false,PI-0.5+g.a,PI+0.5+g.a));ctx.lineTo(F[0],F[1]);ctx.closePath();paint(C['brass-fill'],C.ink);pivot(F[0],F[1],7);
+  const yc=F[1]-R*g.a,pts=[[x0-1.25*md-14,yc-150]];for(let k=-9;k<=9;k++){const y=yc+p/2+k*p;if(Math.abs(y-yc)>145)continue;const a=p/4-0.5,b=a+1.25*md*t,c=a-md*t;pts.push([x0-1.25*md,y-b],[x0+md,y-c],[x0+md,y+c],[x0-1.25*md,y+b]);}pts.push([x0-1.25*md,yc+150],[x0-1.25*md-14,yc+150]);
+  poly(pts);ctx.closePath();paint(C['steel-fill'],C.ink);bar(x0-14,yc+150,x0-14,yc+230,10,C.part);ctx.beginPath();ctx.rect(x0-60,yc+230,90,60);paint(C.part2,C.ink);label('RACK ON THE PISTON ROD WORKS THE BEAM SECTOR',400,40,'center');};}
+
+/* 351 · rack stamp: a 16-tooth pinion with teeth on only ten of its places lifts the toothed stamp rod one tooth per tooth, then
+   its blank part comes round, the rod drops, and the first tooth catches the bottom of the rack again */
+{const m=SIMS_NEW[351],P=[300,230],R=40,Z=16,tau=TAU/Z,p=R*tau,md=2*R/Z,nT=10;
+ m.update=function(phi){const u=mod(phi,TAU),lim=(nT-0.5)*tau;let y,drop=false;if(u<=lim)y=R*Math.min(u,(nT-1)*tau);else{const f=Math.min(1,(u-lim)/0.12);y=R*(nT-1)*tau*(1-f*f);drop=true;}this.g={phi,y,drop,al:-phi};};
+ m.output=function(){return this.g.y;};
+ m.draw=function(){const g=this.g,X=P[0]+R,yb=P[1]+200-g.y;
+   const pts=[[X+1.25*md+18,P[1]-p*12-g.y],[X+1.25*md,P[1]-p*12-g.y]];for(let j=-12;j<=1;j++){const yc=P[1]+(j+0.5)*p-g.y,a=p/4-0.4,t=Math.tan(20*PI/180);pts.push([X+1.25*md,yc-a-1.25*md*t],[X-md,yc-a+md*t],[X-md,yc+a-md*t],[X+1.25*md,yc+a+1.25*md*t]);}
+   pts.push([X+1.25*md,yb],[X+1.25*md+18,yb]);poly(pts);ctx.closePath();paint(C['steel-fill'],C.ink);ctx.beginPath();ctx.rect(X-6,yb,100,50);paint(C['steel-fill'],C.ink);ctx.beginPath();ctx.rect(X-20,P[1]+250,140,24);paint(C.part2,C.ink);
+   polyAt(sectorExt(R,Z,-0.01,(nT-1)*tau+0.01),P[0],P[1],g.al);circ(P[0],P[1],6,false);paint(C['brass-fill'],C.ink);pivot(P[0],P[1],5);
+   label(g.drop?'DROP · the blank part of the pinion lets the stamp fall':'LIFTING · one tooth at a time',X+120,P[1]);label('PART-TOOTHED PINION LIFTS THE RACK, THEN LETS IT FALL',400,505,'center');};}
+
+/* ================= escapements: a contact solver =================
+   The escape wheel is always urged forward by the train. Each frame the oscillator (pendulum, balance or lever) is set from the
+   drive angle, and the wheel is moved forward until one of its contact shapes meets a blocker (pallet, detent, cylinder…). If a
+   blocker has moved into a tooth, the wheel is pushed back (recoil). So locking, impulse, drop and recoil all come out of the
+   shapes themselves, and the same shapes are printed in the 3D models. */
+const ESC={
+  pip(x,y,P){let c=false;for(let i=0,j=P.length-1;i<P.length;j=i++){const a=P[i],b=P[j];if(((a[1]>y)!==(b[1]>y))&&(x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0]))c=!c;}return c;},
+  dens(P,step=3){const o=[];for(let i=0;i<P.length;i++){const a=P[i],b=P[(i+1)%P.length],n=Math.max(1,Math.ceil(Math.hypot(b[0]-a[0],b[1]-a[1])/step));for(let k=0;k<n;k++)o.push([a[0]+(b[0]-a[0])*k/n,a[1]+(b[1]-a[1])*k/n]);}return o;},
+  bbox(P){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const [x,y] of P){if(x<x0)x0=x;if(y<y0)y0=y;if(x>x1)x1=x;if(y>y1)y1=y;}return[x0,y0,x1,y1];},
+  /* wheel: {polys:[[pts local, plane]], C:[x,y]} ; blockers: [[pts world, plane]] ; W wheel angle (canvas, +=clockwise) */
+  hit(wheel,W,blk){const c=Math.cos(W),s=Math.sin(W),C=wheel.C;
+    for(const [B,pl] of blk){const bb=ESC.bbox(B);const loc=B.map(([x,y])=>{const dx=x-C[0],dy=y-C[1];return[dx*c+dy*s,-dx*s+dy*c];});
+      for(const w of wheel.polys){if((w.pl||0)!==(pl||0))continue;
+        for(const q of loc)if(ESC.pip(q[0],q[1],w.pts))return true;
+        for(const p of w.dense){const X=C[0]+p[0]*c-p[1]*s,Y=C[1]+p[0]*s+p[1]*c;if(X<bb[0]||X>bb[2]||Y<bb[1]||Y>bb[3])continue;if(ESC.pip(X,Y,B))return true;}}}
+    return false;},
+  /* advance W from its last value given new blockers */
+  solve(wheel,W,blk,maxStep,dir=1){const d=dir;
+    if(ESC.hit(wheel,W,blk)){for(let k=1;k<=150;k++){const e=k*0.0015;if(!ESC.hit(wheel,W-d*e,blk))return W-d*e;if(!ESC.hit(wheel,W+d*e,blk))return W+d*e;}return W;}
+    let lo=W,step=0.006,hi=null;for(let t=step;t<=maxStep+1e-9;t+=step){if(ESC.hit(wheel,W+d*t,blk)){hi=W+d*t;break;}lo=W+d*t;}
+    if(hi===null)return lo;for(let i=0;i<12;i++){const m=(lo+hi)/2;if(ESC.hit(wheel,m,blk))hi=m;else lo=m;}return lo;},
+  solveF(h,W,maxStep){if(h(W)){for(let k=1;k<=150;k++){const e=k*0.0015;if(!h(W-e))return W-e;if(!h(W+e))return W+e;}return W;}
+    let lo=W,step=0.004,hi=null;for(let t=step;t<=maxStep+1e-9;t+=step){if(h(W+t)){hi=W+t;break;}lo=W+t;}if(hi===null)return lo;for(let i=0;i<12;i++){const m=(lo+hi)/2;if(h(m))hi=m;else lo=m;}return lo;},
+  polyHit(A,B){for(const q of A)if(ESC.pip(q[0],q[1],B))return true;for(const q of B)if(ESC.pip(q[0],q[1],A))return true;return false;},
+  prep(polys){return polys.map(p=>({pts:p.pts,pl:p.pl||0,dense:ESC.dens(p.pts,2.5)}));},
+  rot(P,O,a){const c=Math.cos(a),s=Math.sin(a);return P.map(([x,y])=>[O[0]+(x-O[0])*c-(y-O[1])*s,O[1]+(x-O[0])*s+(y-O[1])*c]);},
+  /* wheel shapes (local, about 0,0; teeth lead in +angle) */
+  saw(N,R,o={}){const p=TAU/N,ri=o.root??R*0.82,pts=[];for(let k=0;k<N;k++){const a=k*p;const bk=o.back??0.55;pts.push([ri*Math.cos(a-bk*p),ri*Math.sin(a-bk*p)]);
+      if(o.club){const t2=a-0.16*p;pts.push([R*Math.cos(a-0.24*p),R*Math.sin(a-0.24*p)],[R*Math.cos(a),R*Math.sin(a)],[(R-4)*Math.cos(a-0.02*p),(R-4)*Math.sin(a-0.02*p)]);}
+      else pts.push([R*Math.cos(a),R*Math.sin(a)]);pts.push([ri*Math.cos(a-(o.under??0.14)*p),ri*Math.sin(a-(o.under??0.14)*p)]);}return pts;},
+  pinPoly(x,y,r,n=10){const o=[];for(let i=0;i<n;i++){const t=i/n*TAU;o.push([x+r*Math.cos(t),y+r*Math.sin(t)]);}return o;},
+  /* an anchor pallet nib in the frame of its pallet point Q: x along u (pivot→Q), y along the inward normal; from +x: teeth arrive from the far side */
+  nib(Q,u,n,shape){return shape.map(([x,y])=>[Q[0]+u[0]*x+n[0]*y,Q[1]+u[1]*x+n[1]*y]);}
+};
+
+/* ---------- pallet ("nib") escapements ----------
+   A nib is a pallet tip in the frame of its pallet point Q: x = against the teeth's motion (teeth arrive from +x), y = toward the
+   wheel centre. Its locking face is the +x side; the slanted inner end is the impulse face. Layouts:
+   anchor  – one anchor whose pivot lies on the tangents from two pallet points (k+½ pitches apart), so the pallets move radially;
+   side    – pallets at the top and bottom of the wheel, pivot to one side (three-legged wheels);
+   gravity – each pallet on its own arm, pushed out by the pendulum in turn and falling back by its weight. */
+function nibGeo(o){const N=o.N,R=o.R,E=o.E,p=TAU/N,dir=o.dir||1;let sides,P;
+  if(o.layout==='side'||o.layout==='gravSide'){const D=o.D??R*2.4;P=[E[0]-D,E[1]];const off=o.off??0;sides=[[E[0],E[1]-R],[E[0]+R*Math.cos(PI/2+off),E[1]+R*Math.sin(PI/2+off)]].map((Q,i)=>({Q,P:o.layout==='gravSide'?[E[0]-D,E[1]+(i?1:-1)*R*1.05]:P,i,s:i?1:-1}));}
+  else{const k=o.span??Math.round((2*(o.beta??0.785))/p-0.5),beta=(k+0.5)*p/2,D=R/Math.cos(beta);P=[E[0],E[1]-D];
+    sides=[-1,1].map((s,i)=>({Q:[E[0]+s*R*Math.sin(beta),E[1]-R*Math.cos(beta)],P:o.layout==='gravity'?[E[0]+s*(o.gx??R*0.25),E[1]-D-30]:P,i,s}));}
+  const pitchLen=p*R,b=o.nibW??(o.wheel==='pins'||o.wheel==='lantern'?0.3*pitchLen:0.25*pitchLen),i=o.lift??Math.max(4,0.32*pitchLen),rec=o.kind==='recoil'?Math.min(3,0.15*pitchLen):0;
+  const grav=o.layout==='gravity'||o.layout==='gravSide',pinIn=o.pinIn??0,yoff=(grav?3:-(i/2-(o.lockIn??0.8)))+pinIn;
+  for(const sd of sides){const Q=sd.Q,t=Math.atan2(Q[1]-E[1],Q[0]-E[0]),v=[-Math.sin(t)*dir,Math.cos(t)*dir],x=[-v[0],-v[1]],n=[(E[0]-Q[0])/R,(E[1]-Q[1])/R];
+    let loc;if(o.pinPallet){const pr=o.pinPallet;loc=ESC.pinPoly(0,pr+yoff-1,pr,12);}else loc=[[-b/2,-14],[b/2-rec,-14],[b/2+rec,0],[-b/2,grav?2:i]].map(([X,Y])=>[X,Y+yoff]);
+    sd.nib=ESC.nib(Q,x,n,loc);sd.top=ESC.nib(Q,x,n,[[0,-14+yoff]])[0];const r90=[-(Q[1]-sd.P[1]),Q[0]-sd.P[0]];sd.L=Math.abs(r90[0]*n[0]+r90[1]*n[1]);sd.outSign=(r90[0]*n[0]+r90[1]*n[1])>0?-1:1;}
+  let raw;const W=o.wheel||'saw';
+  if(W==='pins'||W==='lantern'){const rp=o.pinR??(W==='lantern'?6:Math.min(5,0.22*pitchLen));raw=Array.from({length:N},(_,j)=>{const a=j*p,c=Math.cos(a),sn=Math.sin(a),cx=(R-rp)*c,cy=(R-rp)*sn;
+    if(W==='lantern')return{pts:ESC.pinPoly(cx,cy,rp)};/* half-round pin: flat face leading (radial), round back */const pts=[];for(let k=0;k<=12;k++){const t=a-k/12*PI;pts.push([cx+rp*Math.cos(t),cy+rp*Math.sin(t)]);}return{pts};});}
+  else if(W==='three'){raw=Array.from({length:N},(_,j)=>{const a=j*p,w=o.legW??10,c=Math.cos(a),sn=Math.sin(a),pts=[[16,-w/2],[R-w*0.6,-w/2],[R,w*0.1],[R-2,w/2],[16,w/2]];return{pts:pts.map(([X,Y])=>[X*c-Y*sn*dir,X*sn+Y*c*dir])};});}
+  else raw=[{pts:ESC.saw(N,R,{club:W==='club',under:W==='club'?0.05:0.14,back:o.back})}];
+  if(dir<0)raw=raw.map(r=>({pts:r.pts.map(([X,Y])=>[X,-Y])}));
+  const Lm=Math.min(...sides.map(sd=>sd.L)),ampA=Math.max(0.07,(i/2+4)/Lm);return{N,R,E,P,p,b,i,sides,dir,ampA,wheel:{C:E,polys:ESC.prep(raw)},raw,o};}
+/* angle of each pallet's carrier for oscillator angle a */
+function nibAngles(G,a){const o=G.o;if(o.layout==='gravity'||o.layout==='gravSide'){const c=o.gc??1.4;return G.sides.map(sd=>sd.outSign*(sd.s<0?Math.max(0,-a):Math.max(0,a))*c);}return G.sides.map(()=>a);}
+function nibBlk(G,a){const an=nibAngles(G,a);return G.sides.map((sd,j)=>[ESC.rot(sd.nib,sd.P,an[j]),0]);}
+function drawWheel(G,W){const E=G.E,o=G.o,c=Math.cos(W),s=Math.sin(W),T=([x,y])=>[E[0]+x*c-y*s,E[1]+x*s+y*c],w=o.wheel||'saw';
+  if(w==='pins'){circ(E[0],E[1],G.R+6);paint(C['steel-fill'],C.ink);for(const r of G.raw){poly(r.pts.map(T));ctx.closePath();paint(C.hi,C.ink,1);}}
+  else if(w==='lantern'){circ(E[0],E[1],G.R+8);circ(E[0],E[1],G.R-16,false);paint(C.part,C.ink);for(const r of G.raw){poly(r.pts.map(T));ctx.closePath();paint(C['steel-fill'],C.ink,1);}}
+  else if(w==='three'){for(const r of G.raw){poly(r.pts.map(T));ctx.closePath();paint(C['steel-fill'],C.ink);}circ(E[0],E[1],20);paint(C['steel-fill'],C.ink);}
+  else{poly(G.raw[0].pts.map(T));ctx.closePath();circ(E[0],E[1],7,false);for(let k=0;k<4;k++){const t=W+k*PI/2;circ(E[0]+G.R*0.45*Math.cos(t),E[1]+G.R*0.45*Math.sin(t),G.R*0.16,false);}paint(C['steel-fill'],C.ink);}
+  pivot(E[0],E[1],5);}
+function nibEsc(num,o){const G=nibGeo(o),osc=o.osc||'pend';
+  const lam=th=>osc==='lever'?(o.lb??G.ampA*1.1)*Math.tanh(th/(o.te??0.35)):th;
+  return reg({ESC,num,outLabel:osc==='lever'?'Balance angle, degrees':'Pendulum angle, degrees',concept:!!o.concept,G,
+    reset(){this.W=0;this.lastPhi=null;},
+    th(phi){return(o.amp??(osc==='lever'?2.2:(o.layout==='gravity'||o.layout==='gravSide'?0.1:G.ampA)))*Math.sin(phi);},
+    update(phi){const step=a=>{this.W=ESC.solve(G.wheel,this.W,nibBlk(G,a),G.p,G.dir);};
+      if(this.lastPhi===null){this.W=0;step(lam(this.th(phi)));}else{const n=Math.max(1,Math.ceil(Math.abs(phi-this.lastPhi)/0.012));for(let k=1;k<=n;k++)step(lam(this.th(this.lastPhi+(phi-this.lastPhi)*k/n)));}
+      this.lastPhi=phi;const th=this.th(phi);this.g={phi,th,a:lam(th),W:this.W,an:nibAngles(G,lam(th))};},
+    output(){return this.g.th*180/PI;},
+    draw(){const g=this.g,E=G.E,P=G.P,grav=o.layout==='gravity'||o.layout==='gravSide';
+      if(osc==='pend'){const Ps=grav?[E[0],G.sides[0].P[1]-30]:P;ctx.save();ctx.translate(Ps[0],Ps[1]);ctx.rotate(g.th);bar(0,0,0,480-Ps[1],6,C.part);circ(0,480-Ps[1],22);paint(C['brass-fill'],C.ink);ctx.restore();ground(Ps[0],Ps[1]-12,60,true);}
+      drawWheel(G,g.W);
+      G.sides.forEach((sd,j)=>{const an=g.an[j],A=ESC.rot([sd.P,sd.top],sd.P,an);bar(A[0][0],A[0][1],A[1][0],A[1][1],grav?7:11,C['brass-fill']);poly(ESC.rot(sd.nib,sd.P,an));ctx.closePath();paint(o.kind==='deadbeat'?C.hi:C['brass-fill'],C.ink,1.2);pivot(sd.P[0],sd.P[1],grav?4:6);});
+      if(grav)for(const sd of G.sides)label('',0,0);
+      if(osc==='lever'){const Pf=ESC.rot([[P[0],P[1]-70]],P,g.a)[0];bar(P[0],P[1],Pf[0],Pf[1],8,C['brass-fill']);for(const s of [-1,1]){const f=ESC.rot([[P[0]+s*9,P[1]-82]],P,g.a)[0];bar(Pf[0],Pf[1],f[0],f[1],5,C['brass-fill']);}
+        const B=[P[0],P[1]-70-12-22-6];balanceW(B,o.br||60,g.th);const rp=[B[0]-22*Math.sin(g.th),B[1]+22*Math.cos(g.th)];circ(B[0],B[1],26);paint(C.part,C.ink);circ(rp[0],rp[1],4);paint(C.steel,C.ink);label('BALANCE',B[0]+80,B[1]);label('LEVER',P[0]+30,P[1]-50);}
+      label('ESCAPE WHEEL',E[0]+G.R+20,E[1]+G.R*0.6);label(o.label,400,505,'center');},
+    reads(){const g=this.g;return[[osc==='lever'?'Balance':'Pendulum',`${(g.th*180/PI).toFixed(osc==='lever'?0:1)}°`],['Escape wheel',`${(Math.abs(g.W)/TAU*G.N).toFixed(1)} teeth`],['Per swing','half a tooth']];}});}
+nibEsc(288,{N:30,R:95,E:[400,300],kind:'recoil',label:'ANCHOR (RECOIL) · the wheel is pushed back a little after each drop'});
+nibEsc(238,{N:20,R:95,E:[400,300],kind:'recoil',beta:0.6,label:'PALLETS RELEASE ONE TOOTH AT A TIME'});
+nibEsc(289,{N:30,R:95,E:[400,300],kind:'deadbeat',wheel:'saw',label:'DEAD-BEAT · the locking faces are arcs about the pivot, so the wheel never recoils'});
+nibEsc(290,{N:30,R:95,E:[400,300],kind:'recoil',beta:0.5,label:'PENDULUM ESCAPEMENT'});
+nibEsc(292,{N:30,R:95,E:[400,300],kind:'deadbeat',wheel:'pins',label:'PIN DEAD-BEAT · pins on the wheel face'});
+nibEsc(297,{N:10,R:95,E:[400,300],kind:'recoil',wheel:'lantern',nibW:12,lift:9,label:'LANTERN WHEEL ESCAPEMENT'});
+nibEsc(303,{N:30,R:95,E:[400,300],kind:'deadbeat',wheel:'saw',beta:0.45,label:'PALLET FACES CENTRED ON THE PIVOT'});
+nibEsc(304,{N:30,R:95,E:[400,300],kind:'deadbeat',wheel:'pins',beta:0.5,label:'PIN-WHEEL ESCAPEMENT'});
+nibEsc(305,{N:12,R:95,E:[400,300],kind:'recoil',pinPallet:5,label:'PIN PALLETS ON THE PENDULUM CRUTCH'});
+nibEsc(306,{N:3,R:90,E:[420,280],layout:'side',kind:'recoil',wheel:'three',nibW:12,lift:10,label:'THREE TEETH, UPPER AND LOWER PALLETS'});
+nibEsc(307,{N:3,R:110,E:[420,270],layout:'side',kind:'deadbeat',wheel:'three',nibW:12,lift:10,label:'LONG STOPPING TEETH'});
+nibEsc(309,{N:15,R:90,E:[400,320],layout:'gravity',wheel:'saw',label:'GRAVITY · each arm is lifted off by the pendulum and falls back by its weight'});
+nibEsc(310,{N:3,R:90,E:[440,290],layout:'gravSide',wheel:'three',nibW:12,label:'THREE-LEGGED GRAVITY ESCAPEMENT'});
+nibEsc(311,{N:6,R:90,E:[440,290],layout:'gravSide',wheel:'three',nibW:10,off:-PI/6,label:'DOUBLE THREE-LEGGED GRAVITY'});
+nibEsc(312,{N:10,R:60,E:[400,340],layout:'gravity',wheel:'saw',label:'SMALL LIFTING WHEEL'});
+nibEsc(296,{N:15,R:85,E:[400,380],osc:'lever',kind:'deadbeat',wheel:'saw',label:'LEVER ESCAPEMENT · fork and roller pin'});
+nibEsc(302,{N:15,R:85,E:[400,380],osc:'lever',kind:'recoil',wheel:'saw',label:'BALANCE AND PALLETS'});
+nibEsc(314,{N:15,R:85,E:[400,380],osc:'lever',kind:'deadbeat',wheel:'saw',label:'LEVER CHRONOMETER'});
+
+/* ---------- detent (chronometer) escapements ----------
+   The wheel is held by a stone on the detent. Once per double swing, as the balance turns one way, its discharging pallet lifts
+   the detent for a moment; the wheel turns, a tooth catches up with the impulse pallet on the balance's roller and drives it
+   (the impulse), then the next tooth falls on the stone again. On the return swing the detent is left alone. */
+function detentGeo(o){const N=o.N||12,R=o.R||85,E=o.E||[400,370],p=TAU/N,dir=-1,rr=o.rr||30,ov=o.ov||6.5,d=R+rr-ov,B=[E[0],E[1]-d];
+  const g=o.gam??1.5*p,t=-PI/2+g,Ql=[E[0]+R*Math.cos(t),E[1]+R*Math.sin(t)],v=[Math.sin(t),-Math.cos(t)],x=[-v[0],-v[1]],n=[(E[0]-Ql[0])/R,(E[1]-Ql[1])/R];
+  const Dp=[Ql[0]+x[0]*90,Ql[1]+x[1]*90],stone=ESC.nib(Ql,x,n,[[-3,-12],[3,-12],[3,5],[-3,5]]),r90=[-(Ql[1]-Dp[1]),Ql[0]-Dp[0]],outSign=(r90[0]*n[0]+r90[1]*n[1])>0?-1:1;
+  const raw=[{pts:ESC.saw(N,R,{back:0.5}).map(([X,Y])=>[X,-Y])}];
+  const pal=[[rr-12,-3],[rr,-1.5],[rr,4],[rr-12,4]];/* in roller frame: x radial; the +y side is the face the tooth pushes */
+  const ga=-PI/2+0.2*p,gp=[E[0]+R*Math.cos(ga)-B[0],E[1]+R*Math.sin(ga)-B[1]],c0=o.c0??Math.atan2(gp[1],gp[0])+(o.dc||0),k=30/rr;
+  return{N,R,E,p,dir,B,rr,Ql,Dp,stone,outSign,c0,k,wheel:{C:E,polys:ESC.prep(raw)},raw,pal,o};}
+function detentState(G,phi){const o=G.o,A=o.amp??2.3*G.k,th=A*Math.sin(phi),up=Math.cos(phi)>0,w0=(o.w0??-0.32)*G.k,w1=(o.w1??-0.05)*G.k;
+  const lift=up&&th>w0&&th<w1?Math.sin(PI*(th-w0)/(w1-w0)):0;return{th,del:G.outSign*0.13*lift,lift};}
+function detentBlk(G,st){const rot=st.th+G.c0,c=Math.cos(rot),s=Math.sin(rot),B=G.B;
+  const pal=G.pal.map(([X,Y])=>[B[0]+X*c-Y*s,B[1]+X*s+Y*c]);return[[ESC.rot(G.stone,G.Dp,st.del),0],[pal,0]];}
+function detentEsc(num,o){const G0=detentGeo(o),pend=o.osc==='pend';
+  return reg({ESC,ESCgeo:q=>detentGeo(Object.assign({},o,q)),G:G0,num,outLabel:pend?'Pendulum angle, degrees':'Balance angle, degrees',concept:!!o.concept,
+    reset(){this.W=0;this.lastPhi=null;},
+    update(phi){const G=this.G,step=ph=>{this.W=ESC.solve(G.wheel,this.W,detentBlk(G,detentState(G,ph)),G.p,G.dir);};
+      if(this.lastPhi===null){this.W=0;step(phi);}else{const n=Math.max(1,Math.ceil(Math.abs(phi-this.lastPhi)/0.012));for(let k=1;k<=n;k++)step(this.lastPhi+(phi-this.lastPhi)*k/n);}
+      this.lastPhi=phi;const st=detentState(G,phi);this.g={phi,...st,W:this.W};},
+    output(){return this.g.th*180/PI;},
+    draw(){const G=this.G,g=this.g,E=G.E,B=G.B,blk=detentBlk(G,g);drawWheel({E,R:G.R,raw:G.raw,o:{wheel:'saw'}},g.W);
+      const D=ESC.rot([G.Dp,G.Ql],G.Dp,g.del);bar(D[0][0],D[0][1],D[1][0],D[1][1],7,C.part);poly(blk[0][0]);ctx.closePath();paint(C.hi,C.ink,1);pivot(G.Dp[0],G.Dp[1],4);springZ(G.Dp[0]+6,G.Dp[1]-8,G.Dp[0]+50,G.Dp[1]-40,6,4);
+      if(pend){const tip=[B[0]+(G.rr-12)*Math.cos(g.th+G.c0),B[1]+(G.rr-12)*Math.sin(g.th+G.c0)];bar(B[0],B[1],tip[0],tip[1],7,C.part);const bob=[B[0]+(G.rr+200)*Math.cos(g.th+G.c0),B[1]+(G.rr+200)*Math.sin(g.th+G.c0)];bar(tip[0],tip[1],bob[0],bob[1],5,C.part);circ(bob[0],bob[1],22);paint(C['brass-fill'],C.ink);ground(B[0],B[1]-12,50,true);}
+      else{ctx.save();ctx.globalAlpha=0.35;balanceW([B[0],B[1]],o.br||70,g.th);ctx.restore();circ(B[0],B[1],G.rr-12);paint(C.part,C.ink);}poly(blk[1][0]);ctx.closePath();paint(C['brass-fill'],C.ink,1);
+      if(!pend){const dc=g.th+G.c0+PI*0.55;circ(B[0]+(G.rr-14)*Math.cos(dc),B[1]+(G.rr-14)*Math.sin(dc),3);paint(C.steel,C.ink);}pivot(B[0],B[1],4);
+      label('DETENT',G.Dp[0]+10,G.Dp[1]+20);label(g.lift>0?'DETENT LIFTED · wheel gives impulse':'WHEEL LOCKED ON THE DETENT STONE',400,480,'center');label(o.label,400,505,'center');},
+    reads(){const G=this.G,g=this.g;return[[pend?'Pendulum':'Balance',`${(g.th*180/PI).toFixed(0)}°`],['Escape wheel',`${(Math.abs(g.W)/G.p).toFixed(1)} teeth`],['Impulse','once per double swing']];}});}
+detentEsc(291,{label:'DETENT WATCH ESCAPEMENT · spring detent'});
+detentEsc(313,{label:'CHRONOMETER (DETENT) ESCAPEMENT · pivoted detent'});
+detentEsc(308,{osc:'pend',rr:60,ov:4,dc:0.03,E:[400,330],R:85,label:'DETACHED · the pendulum is free except at the moment of impulse'});
+detentEsc(396,{label:"REED'S ESCAPEMENT · a detent locks, the balance takes impulse once a swing"});
+
+/* ---------- duplex escapement ----------
+   Long teeth rest on a small roller on the balance staff; each time a notch in the roller comes round (one way of the swing)
+   a tooth slips through it, and an impulse pin standing on the wheel's face then drives the balance's pallet arm. */
+function duplexGeo(o){const N=o.N||15,R=o.R||85,E=o.E||[400,360],p=TAU/N,rl=o.rl||7,d=R+rl-(o.ov||3),B=[E[0],E[1]-d],Rp=o.Rp||0.55*R,rpin=o.rpin||3,Lp=d-Rp+(o.pov||5);
+  const teeth={pts:ESC.saw(N,R,{back:0.32,root:R*0.72}),pl:0},pins=Array.from({length:N},(_,j)=>{const a=j*p+(o.pinPh??0)*p;return{pts:ESC.pinPoly(Rp*Math.cos(a),Rp*Math.sin(a),rpin),pl:o.pinContact?1:2};});
+  const nw=o.nw||0.75,roller=[];for(let i=0;i<48;i++){const t=i/48*TAU;const dt=Math.abs(((t+PI)%TAU+TAU)%TAU-PI);const r=dt<nw/2?rl-2.6*(1-dt/(nw/2)):rl;roller.push([r*Math.cos(t),r*Math.sin(t)]);}/* notch centred on local angle 0 */
+  const pal=[[Lp-12,-1.5],[Lp,-1.5],[Lp,1.5],[Lp-12,1.5]];
+  return{N,R,E,p,dir:1,B,rl,Rp,Lp,roller,pal,wheel:{C:E,polys:ESC.prep([teeth,...pins])},teeth,pins,o};}
+function duplexBlk(G,th){const o=G.o,B=G.B,tr=(P,a)=>{const c=Math.cos(a),s=Math.sin(a);return P.map(([x,y])=>[B[0]+x*c-y*s,B[1]+x*s+y*c]);};
+  return[[tr(G.roller,PI/2+th-(o.tn??0.1)),0],[tr(G.pal,PI/2+th-(o.tp??-0.4)),1]];}
+function duplexEsc(num,o){const G0=duplexGeo(o);
+  return reg({ESC,blk:duplexBlk,ESCgeo:q=>duplexGeo(Object.assign({},o,q)),G:G0,num,outLabel:'Balance angle, degrees',concept:!!o.concept,
+    reset(){this.W=0;this.lastPhi=null;},th(phi){return(this.G.o.amp??2.4)*Math.sin(phi);},
+    update(phi){const G=this.G,step=ph=>{this.W=ESC.solve(G.wheel,this.W,duplexBlk(G,this.th(ph)),G.p,1);};
+      if(this.lastPhi===null){this.W=0;step(phi);}else{const n=Math.max(1,Math.ceil(Math.abs(phi-this.lastPhi)/0.012));for(let k=1;k<=n;k++)step(this.lastPhi+(phi-this.lastPhi)*k/n);}
+      this.lastPhi=phi;this.g={phi,th:this.th(phi),W:this.W};},
+    output(){return this.g.th*180/PI;},
+    draw(){const G=this.G,g=this.g,E=G.E,B=G.B,c=Math.cos(g.W),s=Math.sin(g.W),T=([x,y])=>[E[0]+x*c-y*s,E[1]+x*s+y*c],blk=duplexBlk(G,g.th);
+      poly(G.teeth.pts.map(T));ctx.closePath();circ(E[0],E[1],7,false);paint(C['steel-fill'],C.ink);for(const q of G.pins){poly(q.pts.map(T));ctx.closePath();paint(C.hi,C.ink,1);}pivot(E[0],E[1],5);
+      ctx.save();ctx.globalAlpha=0.35;balanceW(B,o.br||70,g.th);ctx.restore();poly(blk[1][0]);ctx.closePath();const pb=blk[1][0];bar(B[0],B[1],(pb[0][0]+pb[3][0])/2,(pb[0][1]+pb[3][1])/2,4,C['brass-fill']);paint(C['brass-fill'],C.ink);
+      poly(blk[0][0]);ctx.closePath();paint(C.hi,C.ink,1);pivot(B[0],B[1],3);
+      label('LOCKING ROLLER with notch',B[0]+20,B[1]-14);label('IMPULSE PINS',E[0]+G.Rp+10,E[1]+10);label(o.label,400,505,'center');},
+    reads(){const G=this.G,g=this.g;return[['Balance',`${(g.th*180/PI).toFixed(0)}°`],['Escape wheel',`${(g.W/G.p).toFixed(1)} teeth`],['Impulse','once per double swing']];}});}
+duplexEsc(300,{label:'DUPLEX · long teeth lock on the roller, short pins give impulse'});
+duplexEsc(301,{label:'DUPLEX, SIDE VIEW'});
+
+/* ---------- cylinder escapement ----------
+   The balance staff is a hollow half-cylinder at the wheel's rim. Each tooth is a wedge raised on a stalk: it rests on the outside
+   of the cylinder, slips in through the opening (its slope pushing the lip: impulse), rests on the inside wall, and leaves through
+   the opening on the return swing, giving a second impulse. The stalks pass under the cut-away part of the cylinder. */
+function cylGeo(o){const N=o.N||12,R=o.R||85,E=o.E||[400,340],p=TAU/N,ri=o.ri||8.5,ro=o.ro||11,hh=6,hl=o.hl||2*ri-3,Cc=[E[0],E[1]-(R-hh/2)];
+  const heads=Array.from({length:N},(_,j)=>{const a=j*p,c=Math.cos(a),s=Math.sin(a),dA=hl/(R-hh/2);const P=(ang,r)=>[r*Math.cos(ang),r*Math.sin(ang)];return{pts:[P(a,R-hh),P(a,R),P(a+dA*0.35,R-0.6),P(a+dA,R-hh+0.6)],pl:1};});
+  const stalks=Array.from({length:N},(_,j)=>{const a=j*p,c=Math.cos(a),s=Math.sin(a),w=3;return{pts:[[ (R-30)*c+w*s,(R-30)*s-w*c],[(R-hh)*c+w*s,(R-hh)*s-w*c],[(R-hh)*c-w*s,(R-hh)*s+w*c],[(R-30)*c-w*s,(R-30)*s+w*c]],pl:0};});
+  const span=o.span??PI+0.25,band=[];const n=40;for(let i=0;i<=n;i++){const t=-span/2+span*i/n;band.push([ro*Math.cos(t),ro*Math.sin(t)]);}for(let i=n;i>=0;i--){const t=-span/2+span*i/n;band.push([ri*Math.cos(t),ri*Math.sin(t)]);}
+  return{N,R,E,p,dir:1,Cc,ri,ro,band,heads,stalks,wheel:{C:E,polys:ESC.prep(heads)},o};}
+function cylBlk(G,th){const o=G.o,a=th+(o.c0??PI/2),c=Math.cos(a),s=Math.sin(a),C=G.Cc;return[[G.band.map(([x,y])=>[C[0]+x*c-y*s,C[1]+x*s+y*c]),1]];}
+function cylEsc(num,o){const G0=cylGeo(o);
+  return reg({ESC,blk:cylBlk,ESCgeo:q=>cylGeo(Object.assign({},o,q)),G:G0,num,outLabel:'Balance angle, degrees',concept:!!o.concept,
+    reset(){this.W=0;this.lastPhi=null;},th(phi){return(this.G.o.amp??2.2)*Math.sin(phi);},
+    update(phi){const G=this.G,step=ph=>{this.W=ESC.solve(G.wheel,this.W,cylBlk(G,this.th(ph)),G.p,1);};
+      if(this.lastPhi===null){this.W=0;step(phi);}else{const n=Math.max(1,Math.ceil(Math.abs(phi-this.lastPhi)/0.012));for(let k=1;k<=n;k++)step(this.lastPhi+(phi-this.lastPhi)*k/n);}
+      this.lastPhi=phi;this.g={phi,th:this.th(phi),W:this.W};},
+    output(){return this.g.th*180/PI;},
+    draw(){const G=this.G,g=this.g,E=G.E,c=Math.cos(g.W),s=Math.sin(g.W),T=([x,y])=>[E[0]+x*c-y*s,E[1]+x*s+y*c];
+      circ(E[0],E[1],G.R-28);circ(E[0],E[1],7,false);paint(C['steel-fill'],C.ink);for(const q of G.stalks){poly(q.pts.map(T));ctx.closePath();paint(C['steel-fill'],C.ink,1);}for(const q of G.heads){poly(q.pts.map(T));ctx.closePath();paint(C['steel-fill'],C.ink,1);}pivot(E[0],E[1],5);
+      ctx.save();ctx.globalAlpha=0.35;balanceW([G.Cc[0],G.Cc[1]-130],o.br||70,g.th);ctx.restore();bar(G.Cc[0],G.Cc[1],G.Cc[0],G.Cc[1]-130,4,C.part);
+      poly(cylBlk(G,g.th)[0][0]);ctx.closePath();paint(C['brass-fill'],C.ink,1.2);
+      label('HALF-CYLINDER on the balance staff',G.Cc[0]+30,G.Cc[1]-20);label(o.label,400,505,'center');},
+    reads(){const G=this.G,g=this.g;return[['Balance',`${(g.th*180/PI).toFixed(0)}°`],['Escape wheel',`${(g.W/G.p).toFixed(2)} teeth`],['Impulse','every swing, on the cylinder lips']];}});}
+cylEsc(294,{label:'CYLINDER ESCAPEMENT · teeth pass through the half-cylinder'});
+cylEsc(295,{label:'CYLINDER ESCAPEMENT, SECOND VIEW'});
+
+/* ---------- verge (crown wheel) escapements, drawn in 3D ----------
+   The crown wheel's teeth stand on its face. The verge staff lies across the face; its two flag pallets, set about 100° apart,
+   meet teeth at the top and at the bottom of the wheel, which move opposite ways. As the verge swings, one flag lets a tooth past
+   while the other comes in front of a tooth on the far side and is pushed back: the wheel recoils at every beat. The contact is
+   solved in the plane of each flag (teeth moving in a straight line past the staff). */
+function vergeGeo(o){const N=o.N||15,Rc=o.Rc||100,h=o.h||18,P=TAU*Rc/N,xs=o.xs??h+12,al=o.al??0.9,Lf=o.Lf??34,wf=3;
+  const prof=[[-0.62*P,0],[-0.62*P,-4],[0.05*P,-4],[0.05*P,0],[0,h],[-0.1*P,1]].slice(0);/* tooth (s along motion, x up from the face); base strip keeps it closed */
+  const tooth=ESC.dens([[-0.62*P,0],[0,h],[-0.12*P,0]],1.5);
+  return{N,Rc,h,P,xs,al,Lf,wf,tooth,o};}
+function vergeShapes(G,W,th){const out={top:[],bot:[]},N=G.N,P=G.P,Rc=G.Rc;
+  for(let k=0;k<N;k++){const t=W+k*TAU/N,st=Rc*(mod(t-PI/2+PI,TAU)-PI),sb=Rc*(mod(t+PI/2+PI,TAU)-PI);
+    if(Math.abs(st)<70)out.top.push(G.tooth.map(([sg,x])=>[x,-(st+sg)]));if(Math.abs(sb)<70)out.bot.push(G.tooth.map(([sg,x])=>[x,(sb+sg)]));}
+  const flag=psi=>{const c=Math.cos(psi),s=Math.sin(psi),n=[-s,c];return[[G.xs+n[0]*G.wf/2,n[1]*G.wf/2],[G.xs+c*G.Lf+n[0]*G.wf/2,s*G.Lf+n[1]*G.wf/2],[G.xs+c*G.Lf-n[0]*G.wf/2,s*G.Lf-n[1]*G.wf/2],[G.xs-n[0]*G.wf/2,-n[1]*G.wf/2]];};
+  out.ft=flag(PI-G.al+th);out.fb=flag(PI+G.al+th);return out;}
+function vergeHit(G,W,th){const S=vergeShapes(G,W,th),ft=ESC.dens(S.ft,1.5),fb=ESC.dens(S.fb,1.5);for(const q of S.top)if(ESC.polyHit(q,ft))return true;for(const q of S.bot)if(ESC.polyHit(q,fb))return true;return false;}
+function vergeEsc(num,o){const G0=vergeGeo(o);
+  return reg({ESC,ESCgeo:q=>vergeGeo(Object.assign({},o,q)),G:G0,num,outLabel:o.osc==='pend'?'Pendulum angle, degrees':o.osc==='bal'?'Balance angle, degrees':'Foliot angle, degrees',concept:!!o.concept,
+    reset(){this.W=0;this.lastPhi=null;},th(phi){return(this.G.o.amp??0.62)*Math.sin(phi);},
+    update(phi){const G=this.G,step=ph=>{const th=this.th(ph);this.W=ESC.solveF(W=>vergeHit(G,W,th),this.W,TAU/G.N);};
+      if(this.lastPhi===null){this.W=0;step(phi);}else{const n=Math.max(1,Math.ceil(Math.abs(phi-this.lastPhi)/0.012));for(let k=1;k<=n;k++)step(this.lastPhi+(phi-this.lastPhi)*k/n);}
+      this.lastPhi=phi;this.g={phi,th:this.th(phi),W:this.W};},
+    output(){return this.g.th*180/PI;},
+    draw(){const G=this.G,g=this.g,R=R3(Object.assign({},CAMG,{cx:400,cy:265,yaw:0.7,pitch:0.22,sc:1.1},o.cam||{})),Rc=G.Rc,N=G.N;
+      const F=fr3([0,0,0],[0,1,0],[0,0,1]);prism3(R,F,ringPts(Rc+2,72),-10,0,C['steel-fill']);
+      for(let k=0;k<N;k++){const t=g.W+k*TAU/N,T=[0,-Math.sin(t),Math.cos(t)],Rr=[0,Math.cos(t),Math.sin(t)],Ft=fr3(v3.mul(Rr,Rc-5),T,[1,0,0]);prism3(R,Ft,[[-0.62*G.P,0],[0,G.h],[-0.12*G.P,0]],0,5,C['steel-fill']);}
+      rod3(R,[-10,0,0],[-150,0,0],5,C.part);
+      const zt=Rc+2,zb=-Rc-2;rod3(R,[G.xs,0,zb-30],[G.xs,0,zt+70],3,C.part);
+      for(const [z,psi] of [[zt,PI-G.al+g.th],[zb,PI+G.al+g.th]]){const c=Math.cos(psi),s=Math.sin(psi);block3(R,[G.xs+c*G.Lf/2,s*G.Lf/2,z],[c,s,0],[0,0,1],G.Lf,G.wf,10,C['brass-fill']);}
+      const top=[G.xs,0,zt+70];
+      if(o.osc==='bal'){const Fb=fr3(top,[Math.cos(g.th),Math.sin(g.th),0],[-Math.sin(g.th),Math.cos(g.th),0]);prism3(R,Fb,ringPts(70,48),0,4,C['brass-fill']);prism3(R,Fb,[[-66,-3],[66,-3],[66,3],[-66,3]],0,4,C['brass-fill']);}
+      else if(o.osc==='pend'){const d=[Math.cos(g.th+PI/2),Math.sin(g.th+PI/2),0];rod3(R,top,v3.add(top,v3.mul(d,40)),3,C.part);rod3(R,v3.add(top,v3.mul(d,40)),v3.add(v3.add(top,v3.mul(d,40)),[0,0,-260]),2,C.part);}
+      else{const c=Math.cos(g.th),s=Math.sin(g.th);block3(R,top,[c,s,0],[0,0,1],300,8,8,C['brass-fill']);for(const k of [-1,1])block3(R,v3.add(top,[k*130*c,k*130*s,0]),[c,s,0],[0,0,1],18,18,22,C['brass-fill']);}
+      R.draw();label(o.label,400,505,'center');},
+    reads(){const G=this.G,g=this.g;return[[o.osc==='bal'?'Balance':o.osc==='pend'?'Pendulum':'Foliot',`${(g.th*180/PI).toFixed(0)}°`],['Crown wheel',`${(g.W/TAU*G.N).toFixed(1)} teeth`],['Recoil','at every beat']];}});}
+vergeEsc(234,{label:'VERGE AND FOLIOT · flags at the top and bottom of the crown wheel catch teeth in turn'});
+vergeEsc(298,{osc:'bal',label:'OLD WATCH (VERGE) ESCAPEMENT · balance on the verge staff'});
+vergeEsc(299,{osc:'pend',label:'OLD CLOCK ESCAPEMENT · verge worked by a short pendulum'});
+vergeEsc(293,{osc:'bal',label:'CROWN-SPUR WATCH ESCAPEMENT'});
+
+/* ================= audit pass 321–360 ================= */
+/* parallel rulers: every one keeps its working edge parallel; each is drawn with the parts that really do the guiding */
+const RUL={
+  dash(y,x0,x1,c){ctx.save();ctx.strokeStyle=c||C.steel;ctx.setLineDash([6,6]);ctx.beginPath();ctx.moveTo(x0,y);ctx.lineTo(x1,y);ctx.stroke();ctx.restore();},
+  rule(x,y,w,h,fill,slot){ctx.beginPath();ctx.rect(x,y,w,h);if(slot){const [a,b,yc]=slot,r=6;ctx.moveTo(b,yc-r);ctx.arc(b,yc,r,-PI/2,PI/2);ctx.lineTo(a,yc+r);ctx.arc(a,yc,r,PI/2,3*PI/2);ctx.closePath();}ctx.fillStyle=fill;ctx.fill('evenodd');ctx.strokeStyle=C.ink;ctx.lineWidth=1.2;ctx.stroke();}
+};
+/* 322 · two right triangles laid hypotenuse to hypotenuse; the lower one is held and the upper slides along the long edge,
+   so its top edge moves to a new line but never turns */
+reg({num:322,outLabel:"Ruler spacing, mm",X0:110,X1:510,Y0:440,Y1:270,
+  update(phi){const s=125*(1-Math.cos(phi*0.5));const L=Math.hypot(this.X1-this.X0,this.Y0-this.Y1),u=[(this.X1-this.X0)/L,(this.Y1-this.Y0)/L];this.g={phi,s,d:[s*u[0],s*u[1]]};},
+  output(){return -(this.g.d[1])+0;},
+  draw(){const g=this.g,{X0,X1,Y0,Y1}=this,[dx,dy]=g.d;
+    poly([[X0,Y0],[X1,Y0],[X1,Y1]]);ctx.closePath();paint(C.part2,C.ink);label('HELD',X1-60,Y0-16,'center');
+    poly([[X0+dx,Y0+dy],[X0+dx,Y1+dy],[X1+dx,Y1+dy]]);ctx.closePath();paint(C['brass-fill'],C.ink);
+    circ(X0+dx+60,Y1+dy+50,10);paint(C.part,C.ink);/* finger knob */
+    RUL.dash(Y1,60,740,C.part);RUL.dash(Y1+dy,60,740);
+    ctx.save();ctx.strokeStyle=C.hi;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(X0+dx,Y1+dy);ctx.lineTo(X1+dx,Y1+dy);ctx.stroke();ctx.restore();
+    label('UPPER TRIANGLE SLIDES ALONG THE LONG EDGE',400,60,'center');label('its top edge (the ruling edge) stays parallel',400,82,'center');},
+  reads(){const g=this.g;return[['Moved up',`${(-g.d[1]).toFixed(0)} mm`],['Moved along',`${g.d[0].toFixed(0)} mm`],['Edge','parallel']];}});
+
+/* 323 · rolling ruler, seen from above: one axle under the rule carries two equal wheels, so both ends roll the same distance
+   and the rule moves square to its edge. A side view of one wheel is inset. */
+reg({num:323,outLabel:'Ruler travel, mm',r:28,
+  update(phi){const y=150*(1-Math.cos(phi*0.5))/2;this.g={phi,y,th:y/this.r};},output(){return this.g.y;},
+  draw(){const g=this.g,r=this.r,Y=380-g.y,x0=150,x1=650,W=56;
+    RUL.dash(380-W/2,60,740,C.part);
+    RUL.rule(x0,Y-W/2,x1-x0,W,C['brass-fill']);
+    for(const x of [x0+40,x1-40]){ctx.beginPath();ctx.rect(x-9,Y-r,18,2*r);paint(C['steel-fill'],C.ink);
+      for(let k=0;k<12;k++){const t=-g.th+k*PI/6,c=Math.cos(t);if(c<0.05)continue;const yy=Y+r*Math.sin(t);ctx.save();ctx.globalAlpha=0.3+0.7*c;ctx.beginPath();ctx.moveTo(x-9,yy);ctx.lineTo(x+9,yy);paint(null,C.ink,1);ctx.restore();}}
+    ctx.save();ctx.setLineDash([3,4]);bar(x0+40,Y,x1-40,Y,6,C.part);ctx.restore();label('AXLE (under the rule)',400,Y+4,'center');
+    ctx.save();ctx.strokeStyle=C.hi;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x0,Y-W/2);ctx.lineTo(x1,Y-W/2);ctx.stroke();ctx.restore();
+    /* side view inset */
+    const I=[690,110];ctx.beginPath();ctx.rect(I[0]-70,I[1]-60,140,120);paint(C.sheet,C.ink,.6);ctx.beginPath();ctx.moveTo(I[0]-65,I[1]+r);ctx.lineTo(I[0]+65,I[1]+r);paint(null,C.ink,1.4);
+    const cx=I[0];for(let k=-3;k<=4;k++){const x=I[0]+mod(k*24+g.y,192)-96;if(x<I[0]-64||x>I[0]+64)continue;ctx.beginPath();ctx.moveTo(x,I[1]+r);ctx.lineTo(x-8,I[1]+r+10);paint(null,C.ink,1);}circ(cx,I[1],r);paint(C['steel-fill'],C.ink);for(let k=0;k<4;k++){const t=-g.th+k*PI/2;bar(cx,I[1],cx+(r-4)*Math.cos(t),I[1]+(r-4)*Math.sin(t),3,C.part);}pivot(cx,I[1],3);label('SIDE VIEW',I[0],I[1]-46,'center');
+    label('BOTH WHEELS ARE FAST ON ONE AXLE · the rule rolls square to its edge',400,490,'center');},
+  reads(){const g=this.g;return[['Travel',`${g.y.toFixed(0)} mm`],['Wheel turns',`${(g.th/TAU).toFixed(2)}`]];}});
+
+/* 324 · two rules joined by two equal arms crossed and pivoted at their middles. Each arm is pinned to one rule at one end and
+   slides in a slot of the other rule at the other end, so the upper rule rises straight up, square to the lower one. */
+reg({num:324,outLabel:'Ruler spacing, mm',L:250,xa:280,y0:420,
+  update(phi){const t=0.28+0.5*(1-Math.cos(phi*0.5))/2;this.g={phi,t,h:this.L*Math.sin(t),c:this.L*Math.cos(t)};},output(){return this.g.h;},
+  draw(){const g=this.g,{L,xa,y0}=this,y1=y0-g.h,xs=xa+g.c,H=34,sa=xa+L*Math.cos(0.78)-2,sb=xa+L*Math.cos(0.28)+2;
+    RUL.rule(150,y0-H/2,520,H,C.part2,[sa,sb,y0]);RUL.rule(150,y1-H/2,520,H,C['brass-fill'],[sa,sb,y1]);label('HELD',620,y0+4,'center');
+    bar(xa,y0,xs,y1,12,C['steel-fill']);bar(xa,y1,xs,y0,12,C['steel-fill']);
+    pivot(xa,y0,5);pivot(xa,y1,5);circ(xs,y1,6);paint(C.hi,C.ink);circ(xs,y0,6);paint(C.hi,C.ink);pivot(xa+g.c/2,(y0+y1)/2,5);
+    RUL.dash(y0-L*Math.sin(0.28),60,740,C.part);
+    ctx.save();ctx.strokeStyle=C.part;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(xa,y0+40);ctx.lineTo(xa,y0-L-20);ctx.stroke();ctx.restore();
+    label('PINNED END',xa-12,y1-26,'right');label('PIN IN SLOT',xs+14,y1-26);
+    label('ARMS CROSSED AND PIVOTED AT THE MIDDLE · the upper rule rises straight up',400,490,'center');},
+  reads(){const g=this.g;return[['Spacing',`${g.h.toFixed(0)} mm`],['Pin in slot at',`${g.c.toFixed(0)} mm`],['Side shift','none']];}});
+
+/* 349 · jointed arms: each arm is two links with a joint at the middle; the two joints are tied by a middle bar, so each half is
+   a parallelogram and the rule can be opened twice as wide while staying parallel */
+reg({num:349,outLabel:'Ruler spacing, mm',l:110,
+  update(phi){const a1=-PI/2+0.75*Math.sin(phi*0.5),a2=-PI/2+0.75*Math.sin(phi*0.5-0.9);this.g={phi,a1,a2,h:-this.l*(Math.sin(a1)+Math.sin(a2))};},output(){return this.g.h;},
+  draw(){const g=this.g,l=this.l,y0=430,P=[260,540],d1=[l*Math.cos(g.a1),l*Math.sin(g.a1)],d2=[l*Math.cos(g.a2),l*Math.sin(g.a2)],H=30;
+    RUL.rule(150,y0-H/2,500,H,C.part2);label('HELD',600,y0+4,'center');
+    const M=P.map(x=>[x+d1[0],y0+d1[1]]),T=M.map(m=>[m[0]+d2[0],m[1]+d2[1]]);
+    RUL.rule(T[0][0]-110,T[0][1]-H/2,500,H,C['brass-fill']);
+    bar(M[0][0]-40,M[0][1],M[1][0]+40,M[1][1],10,C.part);
+    for(let i=0;i<2;i++){bar(P[i],y0,M[i][0],M[i][1],10,C['steel-fill']);bar(M[i][0],M[i][1],T[i][0],T[i][1],10,C['steel-fill']);pivot(P[i],y0,4);pivot(M[i][0],M[i][1],4);pivot(T[i][0],T[i][1],4);}
+    RUL.dash(T[0][1]-H/2,60,740);label('MIDDLE BAR',M[1][0]+50,M[1][1]-12);
+    label('JOINTED ARMS · two parallelograms, one above the other',400,490,'center');},
+  reads(){const g=this.g;return[['Spacing',`${g.h.toFixed(0)} mm`],['Edges','parallel']];}});
+
+/* 321 · Harrison's maintaining power. The barrel's ratchet drives the going ratchet through a click; the going ratchet drives the
+   great wheel through two springs, which are therefore always a little compressed. To wind, the barrel is turned backwards: the click
+   slips over the barrel ratchet, the maintaining detent on the frame stops the going ratchet from turning back, and the compressed
+   springs keep pushing the great wheel forward until winding is done. */
+const RAT={/* ratchet outline, local; dir +1: free to turn + (clockwise) under a fixed pawl, blocked − ; dir −1 the reverse */
+  pts(N,r0,R,dir,ph=0){const p=TAU/N,o=[];for(let i=0;i<N;i++){const a=ph+i*p;if(dir>0){o.push([R*Math.cos(a),R*Math.sin(a)]);for(let k=1;k<=4;k++){const t=a+p*k/4*0.97,r=R-(R-r0)*k/4;o.push([r*Math.cos(t),r*Math.sin(t)]);}}
+    else{o.push([r0*Math.cos(a),r0*Math.sin(a)]);for(let k=1;k<=4;k++){const t=a+p*0.03+p*0.97*k/4,r=r0+(R-r0)*k/4;o.push([r*Math.cos(t),r*Math.sin(t)]);}}}return o;},
+  rho(N,r0,R,dir,ph,t){const p=TAU/N,f=mod(t-ph,p)/p;return dir>0?R-(R-r0)*Math.min(1,f/0.97):(f<0.03?r0:r0+(R-r0)*(f-0.03)/0.97);},
+  /* pawl pivoted at D (relative to wheel centre, wheel-frame angles), length l: find the tip angle b in [b0,b1] that rests on the teeth */
+  pawl(N,r0,R,dir,ph,D,l,b0,b1){let lo=b0,hi=b1;const f=b=>{const T=[D[0]+l*Math.cos(b),D[1]+l*Math.sin(b)];return Math.hypot(T[0],T[1])-RAT.rho(N,r0,R,dir,ph,Math.atan2(T[1],T[0]));};
+    const fl=f(lo);if(fl*f(hi)>0){return Math.abs(fl)<Math.abs(f(hi))?lo:hi;}for(let i=0;i<40;i++){const m=(lo+hi)/2;if(f(m)*fl>0)lo=m;else hi=m;}return(lo+hi)/2;}
+};
+reg({num:321,RAT,outLabel:'Great wheel, turns',O:[330,262],T:4*PI,k:3*TAU/16/(4*PI),d0:0.5,wa:0.5*PI,wd:3.0,
+  NG:40,rg0:96,RG:110,NB:16,rb0:46,RB:58,RW:150,ZW:60,
+  update(phi){const T=this.T,k=this.k,c=Math.floor(phi/T),u=phi-c*T,gw=k*phi,pg=TAU/this.NG,wb=3*TAU/16,ws=c*T+this.wa,we=ws+this.wd;
+    let ra,ba,wind=false;const raS=k*ws+this.d0,hold=pg*Math.floor(raS/pg+1e-9)+0.004;
+    if(phi<ws){ra=gw+this.d0;ba=ra-c*wb;}
+    else if(phi<we){wind=true;const s=(phi-ws)/this.wd;ra=raS+(hold-raS)*smooth(Math.min(1,s*8));ba=raS-c*wb-wb*smooth(s);ra=Math.min(ra,raS);}
+    else{const r=smooth(Math.min(1,(phi-we)/0.5));ra=hold+(gw+this.d0-hold)*r;ba=ra-(c+1)*wb;}
+    this.g={phi,gw,ra,ba,wind,sp:ra-gw};},
+  output(){return this.g.gw/TAU;},
+  draw(){const g=this.g,O=this.O,{NG,rg0,RG,NB,rb0,RB,RW,ZW}=this;
+    /* weight on the barrel cord (the barrel is behind the wheels) */
+    const yW=300+40*g.ba;rope([[O[0]-36,O[1]],[O[0]-36,yW]]);weight(O[0]-36,yW,44,54,'');
+    drawGear(O[0],O[1],RW,ZW,g.gw,C['steel-fill'],{bore:8,spokes:4});
+    const P=[O[0]+RW+28,O[1]];drawGear(P[0],P[1],28,12,-g.gw*ZW/12+PI/12,C.part,{bore:4});pivot(P[0],P[1],4);label('TRAIN',P[0]+40,P[1]-30);
+    /* going ratchet: a toothed ring on three spokes; two spokes carry springs that push studs on the great wheel */
+    const at=(a,r)=>[O[0]+r*Math.cos(a),O[1]+r*Math.sin(a)];
+    polyAt(RAT.pts(NG,rg0,RG,1),O[0],O[1],g.ra);circ(O[0],O[1],88,false);ctx.fillStyle=C['brass-fill'];ctx.fill('evenodd');ctx.strokeStyle=C.ink;ctx.lineWidth=1.2;ctx.stroke();
+    for(let k=0;k<3;k++){const a=g.ra-0.9+k*TAU/3;bar(...at(a,20),...at(a,90),12,C['brass-fill']);}circ(O[0],O[1],24);paint(C['brass-fill'],C.ink);
+    for(const k of [1,2]){const a1=g.ra-0.9+k*TAU/3,a2=g.gw+this.d0-0.9+k*TAU/3+0.8;/* spring from the spoke to the great-wheel stud */
+      ctx.save();ctx.strokeStyle=C.muted;ctx.lineWidth=1.4;ctx.beginPath();const n=2*Math.max(3,Math.round((a2-a1)*72/6));for(let i=0;i<=n;i++){const t=a1+0.08+(a2-a1-0.16)*i/n,r=72+(i%2?5:-5)*(i>0&&i<n?1:0),p=at(t,r);i?ctx.lineTo(...p):ctx.moveTo(...p);}ctx.stroke();ctx.restore();
+      circ(...at(a2,72),5);paint(C.part,C.ink);}
+    /* barrel ratchet and the click riding on the going ratchet */
+    polyAt(RAT.pts(NB,rb0,RB,-1),O[0],O[1],g.ba);paint(C.part2,C.ink);circ(O[0],O[1],14);paint(C['steel-fill'],C.ink);ctx.beginPath();ctx.rect(O[0]-6,O[1]-6,12,12);paint(C.part,C.ink);
+    {const Dl=[78*Math.cos(-0.9),78*Math.sin(-0.9)],rel=g.ba-g.ra,b=RAT.pawl(NB,rb0,RB,-1,rel,Dl,30,-PI-0.9,-PI+1.2);
+     const D=at(g.ra-0.9,78),bw=b+g.ra,Tp=[D[0]+30*Math.cos(bw),D[1]+30*Math.sin(bw)];bar(...D,...Tp,7,C.part);pivot(...D,3.5);springZ(D[0]+8*Math.cos(g.ra-0.2),D[1]+8*Math.sin(g.ra-0.2),...at(g.ra-0.55,82),4,3);}
+    /* maintaining detent on the frame */
+    {const Dd=[172*Math.cos(-2.75),172*Math.sin(-2.75)],b=RAT.pawl(NG,rg0,RG,1,g.ra,Dd,95,-0.8,0.5),D=[O[0]+Dd[0],O[1]+Dd[1]],Tp=[D[0]+95*Math.cos(b),D[1]+95*Math.sin(b)];
+     bar(...D,...Tp,8,g.wind?C.hi:C.part);pivot(...D,4.5);ground(D[0],D[1]-8,30,true);label('MAINTAINING DETENT',D[0]-10,D[1]-22,'right');}
+    pivot(O[0],O[1],5);
+    label('GOING RATCHET',O[0]+60,O[1]+RW+26);label('BARREL RATCHET',O[0]-120,O[1]+RW+26,'center');
+    label(g.wind?'WINDING · barrel turned back, detent holds the going ratchet, springs drive the great wheel':'GOING · barrel → click → going ratchet → springs → great wheel',400,505,'center');},
+  reads(){const g=this.g;return[['State',g.wind?'being wound':'going'],['Spring set',`${((g.sp)*180/PI).toFixed(0)}°`],['Great wheel','never stops']];}});
+
+/* 347 · Bishop's disk engine, seen in section with the crank in plan. The disk piston is fixed on a ball at the centre of a spherical
+   chamber whose faces are two shallow cones. A radial partition passes through a slot in the disk, so the disk cannot spin; steam on one
+   side and exhaust on the other make it nod round, so its spindle sweeps a cone and turns the crank on the vertical shaft once per nod. */
+reg({num:347,outLabel:'Crank turns',concept:true,O:[300,320],R:140,t:0.38,Ls:170,
+  geo(phi){const t=this.t,n=[Math.sin(t)*Math.cos(phi),Math.sin(t)*Math.sin(phi),Math.cos(t)],u=[Math.cos(t)*Math.cos(phi),Math.cos(t)*Math.sin(phi),-Math.sin(t)],v=[-Math.sin(phi),Math.cos(phi),0];return{n,u,v};},
+  update(phi){this.g={phi,...this.geo(phi)};},output(){return this.g.phi/TAU;},
+  draw(){const g=this.g,O=this.O,R=this.R,t=this.t,P=(p)=>[O[0]+p[0],O[1]-p[2]];
+    /* casing in section: two cones and the spherical wall */
+    ctx.beginPath();ctx.moveTo(O[0]-R-24,O[1]-R*Math.sin(t)-34);ctx.lineTo(O[0]-R*Math.cos(t),O[1]-R*Math.sin(t));ctx.lineTo(O[0],O[1]);ctx.lineTo(O[0]+R*Math.cos(t),O[1]-R*Math.sin(t));ctx.lineTo(O[0]+R+24,O[1]-R*Math.sin(t)-34);ctx.lineTo(O[0]+R+24,O[1]-R*Math.sin(t)-60);ctx.lineTo(O[0]-R-24,O[1]-R*Math.sin(t)-60);ctx.closePath();paint(C.part2,C.ink);
+    ctx.beginPath();ctx.moveTo(O[0]-R-24,O[1]+R*Math.sin(t)+34);ctx.lineTo(O[0]-R*Math.cos(t),O[1]+R*Math.sin(t));ctx.lineTo(O[0],O[1]);ctx.lineTo(O[0]+R*Math.cos(t),O[1]+R*Math.sin(t));ctx.lineTo(O[0]+R+24,O[1]+R*Math.sin(t)+34);ctx.lineTo(O[0]+R+24,O[1]+R*Math.sin(t)+60);ctx.lineTo(O[0]-R-24,O[1]+R*Math.sin(t)+60);ctx.closePath();paint(C.part2,C.ink);
+    for(const s of [-1,1]){ctx.beginPath();ctx.arc(O[0],O[1],R,s>0?-t-0.02:PI-t-0.02,s>0?t+0.02:PI+t+0.02);ctx.lineTo(O[0]+s*(R+24),O[1]+R*Math.sin(t)+34);ctx.lineTo(O[0]+s*(R+24),O[1]-R*Math.sin(t)-34);ctx.closePath();paint(C.part2,C.ink);}
+    ctx.beginPath();ctx.arc(O[0],O[1],R,-t,t);ctx.arc(O[0],O[1],R,PI-t,PI+t);paint(null,C.ink,1.4);
+    /* disk piston (projected) */
+    const pts=[];for(let i=0;i<64;i++){const s=i/64*TAU,p=[0,1,2].map(k=>R*0.985*(g.u[k]*Math.cos(s)+g.v[k]*Math.sin(s)));pts.push(P(p));}poly(pts);ctx.closePath();paint(C['steel-fill'],C.ink);
+    circ(O[0],O[1],26);paint(C['brass-fill'],C.ink);
+    /* spindle, crank and vertical shaft */
+    const E=P(g.n.map(x=>x*this.Ls)),zE=O[1]-this.Ls*Math.cos(t);bar(O[0],O[1],E[0],E[1],12,C['brass-fill']);
+    ctx.beginPath();ctx.rect(O[0]-7,zE-150,14,150+8);paint(C.part,C.ink);bar(O[0],zE,E[0],zE,12,C.part2);circ(E[0],zE,8);paint(C.hi,C.ink);
+    ctx.beginPath();ctx.ellipse(O[0],zE-120,70,14,0,0,TAU);paint(C['steel-fill'],C.ink);label('TO THE MACHINE',O[0]+80,zE-120);
+    pivot(O[0],O[1],5);label('STEAM',O[0]-R-30,O[1]+4,'right');label('EXHAUST',O[0]+R+30,O[1]+4);
+    /* plan of the crank and partition */
+    const Q=[640,300],rq=70;circ(Q[0],Q[1],rq+14);paint(C.part2,C.ink);circ(Q[0],Q[1],rq);paint(C.sheet,C.ink);bar(Q[0],Q[1]+12,Q[0],Q[1]+rq+14,8,C.part);
+    const cp=[Q[0]+rq*Math.sin(t)/Math.sin(t)*0.75*Math.cos(g.phi),Q[1]+rq*0.75*Math.sin(g.phi)];bar(Q[0],Q[1],cp[0],cp[1],12,C.part2);circ(cp[0],cp[1],7);paint(C.hi,C.ink);pivot(Q[0],Q[1],5);
+    label('PLAN',Q[0],Q[1]-rq-26,'center');label('fixed partition',Q[0]+12,Q[1]+rq+30);
+    label('THE DISK NODS ROUND WITHOUT SPINNING · its spindle turns the crank once per nod',400,500,'center');},
+  reads(){return[['Disk','nods, does not spin'],['Crank turns',`${(this.g.phi/TAU).toFixed(2)}`]];}});
+
+/* 348 · the slide's pin runs in a four-lobed groove (two crossed slots joined round the edge) cut in the turning disk. The groove is the
+   curve r = a·cos 2θ, so the pin makes two complete strokes for each turn of the disk. */
+reg({num:348,outLabel:'Slide position, mm',concept:true,O:[300,280],a:80,
+  groove(){const o=[];for(let i=0;i<=360;i++){const th=i/360*TAU,r=this.a*Math.cos(2*th);o.push([r*Math.cos(th),r*Math.sin(th)]);}return o;},
+  update(phi){this.g={phi,x:this.a*Math.cos(2*phi)};},output(){return this.g.x;},
+  draw(){const g=this.g,O=this.O,c=Math.cos(g.phi),s=Math.sin(g.phi);circ(O[0],O[1],130);paint(C['brass-fill'],C.ink);
+    const W=this.groove().map(([x,y])=>[O[0]+x*c-y*s,O[1]+x*s+y*c]);ctx.save();ctx.lineJoin='round';ctx.lineCap='round';ctx.beginPath();poly(W,false);ctx.strokeStyle=C.ink;ctx.lineWidth=21;ctx.stroke();ctx.strokeStyle=C.sheet;ctx.lineWidth=18;ctx.stroke();ctx.restore();
+    pivot(O[0],O[1],6);const px=O[0]+g.x;ctx.beginPath();ctx.rect(470,O[1]-26,290,10);ctx.rect(470,O[1]+16,290,10);paint(C.part2,C.ink);
+    bar(px,O[1],760,O[1],14,C['steel-fill']);ctx.beginPath();ctx.rect(px+170,O[1]-16,60,32);paint(C['steel-fill'],C.ink);circ(px,O[1],8);paint(C.hi,C.ink);
+    label('GROOVE r = a·cos 2θ: two crossed slots joined at the rim',400,470,'center');label('TWO STROKES EACH TURN',400,492,'center');},
+  reads(){return[['Strokes per turn','2'],['Slide',`${this.g.x.toFixed(0)} mm`]];}});
+
+/* 353 · belly-helve (tilt) hammer as a lever of the first order: the wipers on the cam wheel press the tail down behind the pivot,
+   raising the head; when a wiper slips off the end of the tail, the head falls on the work. */
+reg({num:353,outLabel:'Hammer lift, mm',F:[440,250],Lh:270,Lt:150,W:[555,198],rw:58,
+  tipA(phi){const F=this.F,W=this.W;let a=0;for(let k=0;k<3;k++){const t=-phi*1.5+k*TAU/3,T=[W[0]+this.rw*Math.cos(t)-F[0],W[1]+this.rw*Math.sin(t)-F[1]];if(T[0]<20||T[0]>this.Lt)continue;
+      /* angle at which the helve's top face (10 above the centre line) passes through the tip */
+      const r=Math.hypot(T[0],T[1]),b=Math.atan2(T[1],T[0]),need=b+Math.asin(10/r);if(need>a)a=need;}return Math.min(a,0.3);},
+  update(phi){const a=this.tipA(phi);this.g={phi,a,lift:this.Lh*Math.sin(a)};},output(){return this.g.lift;},
+  draw(){const g=this.g,F=this.F,W=this.W;ctx.beginPath();ctx.rect(F[0]-330,F[1]+40,90,40);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(F[0]-320,F[1]+30,70,10);paint(C['steel-fill'],C.ink);label('ANVIL',F[0]-285,F[1]+100,'center');
+    ctx.save();ctx.translate(F[0],F[1]);ctx.rotate(g.a);ctx.beginPath();ctx.rect(-this.Lh,-10,this.Lh+this.Lt,20);paint(C['brass-fill'],C.ink);ctx.beginPath();ctx.rect(-this.Lh-30,-24,56,54);paint(C['steel-fill'],C.ink);ctx.restore();
+    ctx.beginPath();ctx.moveTo(F[0]-16,F[1]+70);ctx.lineTo(F[0],F[1]);ctx.lineTo(F[0]+16,F[1]+70);ctx.closePath();paint(C.part2,C.ink);pivot(F[0],F[1],6);
+    circ(W[0],W[1],30);paint(C.part,C.ink);for(let k=0;k<3;k++){const t=-g.phi*1.5+k*TAU/3;bar(W[0],W[1],W[0]+this.rw*Math.cos(t),W[1]+this.rw*Math.sin(t),12,C.part2);}pivot(W[0],W[1],5);
+    label('CAM WHEEL',W[0]+40,W[1]-50);label('WIPERS PRESS THE TAIL DOWN BEHIND THE PIVOT · the head rises, then falls',400,490,'center');},
+  reads(){return[['Head lift',`${this.g.lift.toFixed(0)} mm`],['Blows per turn','3']];}});
+
+/* 358 · a fusee varies a carriage's traverse: the carriage is drawn along by a cord winding onto a turning fusee. The cord climbs the
+   spiral groove from the small end to the large, so although the fusee turns steadily the carriage moves faster and faster. */
+reg({num:358,outLabel:'Carriage speed, mm/turn',concept:true,x0:110,x1:270,y:200,r0:12,r1:38,turns:2.5,X0:700,
+  sOf(th){const Th=this.turns*TAU;return this.r0*th+(this.r1-this.r0)*th*th/(2*Th);},
+  update(phi){const Th=this.turns*TAU,u=mod(phi,2*Th),th=u<Th?u:2*Th-u;const r=this.r0+(this.r1-this.r0)*th/Th;this.g={phi,th,r,X:this.X0-this.sOf(th),v:r*TAU};},output(){return this.g.v;},
+  draw(){const g=this.g,{x0,x1,y,r0,r1}=this,Th=this.turns*TAU,xs=th=>x0+(x1-x0)*th/Th,rs=th=>r0+(r1-r0)*th/Th;
+    ctx.beginPath();ctx.rect(x0-34,y-60,12,150);ctx.rect(x1+18,y-60,12,150);paint(C.part2,C.ink);bar(x0-50,y,x1+30,y,8,C.part);
+    poly([[x0,y-r0],[x1,y-r1],[x1,y+r1],[x0,y+r0]]);ctx.closePath();paint(C['brass-fill'],C.ink);
+    ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=0.8;for(let i=0;i<=400;i++){}ctx.beginPath();let pen=false;for(let i=0;i<=600;i++){const th=i/600*Th,a=th-g.th,vis=Math.sin(a)>0;const p=[xs(th),y-rs(th)*Math.cos(a)];if(vis){pen?ctx.lineTo(...p):ctx.moveTo(...p);pen=true;}else pen=false;}ctx.stroke();
+    ctx.strokeStyle=C.steel;ctx.lineWidth=2.4;ctx.beginPath();pen=false;for(let i=0;i<=600;i++){const th=i/600*Th;if(th>g.th)break;const a=th-g.th,vis=Math.sin(a)>0;const p=[xs(th),y-rs(th)*Math.cos(a)];if(vis){pen?ctx.lineTo(...p):ctx.moveTo(...p);pen=true;}else pen=false;}ctx.stroke();ctx.restore();
+    const C0=[xs(g.th),y-rs(g.th)];rope([C0,[g.X-30,y-rs(g.th)*0+(-30)]]);
+    ctx.beginPath();ctx.rect(300,y+44,460,8);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(g.X-30,y-44,80,88);paint(C['steel-fill'],C.ink);circ(g.X-12,y+48,7);circ(g.X+32,y+48,7);paint(C.part,C.ink);
+    springZ(g.X+50,y,760,y,14,7);ctx.beginPath();ctx.rect(760,y-40,12,80);paint(C.part2,C.ink);
+    ctx.beginPath();ctx.moveTo(x0-50,y);ctx.lineTo(x0-50,y+40);paint(null,C.ink,4);circ(x0-50,y+40,6);paint(C.part,C.ink);label('FUSEE TURNS STEADILY',x1-60,y-70,'center');label('CARRIAGE',g.X+10,y-56,'center');
+    label('THE CORD CLIMBS FROM THE SMALL END TO THE LARGE · the carriage speeds up',400,470,'center');label(`cord on radius ${g.r.toFixed(0)} mm`,400,492,'center');},
+  reads(){const g=this.g;return[['Cord radius',`${g.r.toFixed(0)} mm`],['Carriage speed',`${g.v.toFixed(0)} mm/turn`],['Carriage',`${(this.X0-g.X).toFixed(0)} mm`]];}});
+
+/* 360 · a rocking beam turns a flywheel shaft. A cord from the beam is wound on a drum loose on the shaft; the drum carries a pawl
+   that engages a ratchet fast on the shaft. As the beam end rises it pulls the drum round and the pawl drives the shaft; a weight on
+   a second cord turns the drum back on the return, the pawl clicking over the teeth while the flywheel keeps the shaft going. */
+reg({num:360,outLabel:'Shaft, turns',concept:true,F:[400,90],Lb:200,S:[560,290],rd:40,N:20,r0:55,R:70,mu:0.16,
+  reset(){this.st=null;},
+  dOf(phi){return this.Lb*Math.sin(0.35*Math.sin(phi))/this.rd;},
+  update(phi){const p=TAU/this.N;if(!this.st||phi<this.st.phi-1e-9)this.st={phi:0,wf:0,v:0,off:0};const st=this.st;const dt=0.02;
+    while(st.phi<phi-1e-9){const h=Math.min(dt,phi-st.phi),d0=-this.dOf(st.phi),d1=-this.dOf(st.phi+h);st.phi+=h;st.v=Math.max(0,st.v-this.mu*h);st.wf+=st.v*h;
+      if(d1-st.wf>st.off){const nw=d1-st.off;st.v=Math.max(st.v,(nw-st.wf)/h*0.999);st.wf=nw;}while(d1-st.wf<st.off-p)st.off-=p;}
+    const d=this.dOf(phi);this.g={phi,a:0.35*Math.sin(phi),d,w:-st.wf,drive:-this.dOf(phi+0.02)+this.dOf(phi)>0&&Math.abs((-d-st.wf)-st.off)<1e-3};},
+  output(){return -this.g.w/TAU;},
+  draw(){const g=this.g,F=this.F,S=this.S,rd=this.rd,{N,r0,R}=this;
+    /* flywheel behind */
+    circ(S[0],S[1],150);circ(S[0],S[1],132,false);paint(C.part2,C.ink);for(let k=0;k<6;k++){const t=g.w+k*PI/3;bar(S[0],S[1],S[0]+132*Math.cos(t),S[1]+132*Math.sin(t),10,C.part2);}
+    polyAt(RAT.pts(N,r0,R,-1),S[0],S[1],g.w);paint(C['steel-fill'],C.ink);
+    /* drum with its pawl arm */
+    const at=(a,r)=>[S[0]+r*Math.cos(a),S[1]+r*Math.sin(a)];bar(S[0],S[1],...at(g.d,96),18,C['brass-fill']);circ(S[0],S[1],rd);paint(C['brass-fill'],C.ink);
+    {const D=[92,0],b=RAT.pawl(N,r0,R,-1,g.w-g.d,D,48,-3.1,-1.8),Pv=at(g.d,92),bw=b+g.d,T=[Pv[0]+48*Math.cos(bw),Pv[1]+48*Math.sin(bw)];bar(...Pv,...T,8,g.drive?C.hi:C.part);pivot(...Pv,3.5);}
+    pivot(S[0],S[1],6);
+    /* beam, cords and weight */
+    const E=[F[0]+this.Lb*Math.cos(g.a),F[1]+this.Lb*Math.sin(g.a)],H=[F[0]-this.Lb*Math.cos(g.a),F[1]-this.Lb*Math.sin(g.a)];
+    rope([[S[0]+rd,S[1]],[S[0]+rd,E[1]]]);const yW=400+rd*g.d;rope([[S[0]+rd+1,S[1]],[S[0]+rd+1,yW]]);weight(S[0]+rd+1,yW,40,46,'');
+    ctx.beginPath();ctx.rect(F[0]-14,F[1],28,380);paint(C.part2,C.ink);ctx.save();ctx.translate(F[0],F[1]);ctx.rotate(g.a);ctx.beginPath();ctx.rect(-this.Lb-20,-10,2*this.Lb+20+4,20);paint(C['brass-fill'],C.ink);ctx.restore();pivot(F[0],F[1],6);
+    bar(H[0],H[1],H[0],H[1]+60,10,C.part);label('BEAM',F[0]-120,F[1]-24,'center');label('RETURN WEIGHT',S[0]+rd+30,yW+30);label('RATCHET ON THE SHAFT',S[0]-150,S[1]+170);label('DRUM AND PAWL (loose)',S[0]+60,S[1]+170);
+    label(g.drive?'BEAM END RISING · pawl drives the shaft':'RETURN · pawl clicks over the teeth, the flywheel carries on',400,30,'center');},
+  reads(){const g=this.g;return[['Shaft turns',`${(-g.w/TAU).toFixed(2)}`],['Pawl',g.drive?'driving':'slipping']];}});
+
+/* 340 · beam on a rocking pillar: the pillar rocks on its foot G and carries the middle of the beam; one end of the beam is held by a
+   radius bar so that it moves nearly along the level line through G, and then the other end (the piston rod) moves almost straight up
+   and down over G (Scott Russell's arrangement, with the radius bar standing in for a slide). */
+reg({num:340,outLabel:"Piston-rod sideways error, mm",G:[440,470],a:140,Rf:[570,120],
+  reset(){this.trail=[];},
+  geo(phi){const G=this.G,a=this.a,th=(60+12*Math.sin(phi))*PI/180,T=[G[0]+a*Math.cos(th),G[1]-a*Math.sin(th)],Lr=Math.hypot(G[0]+2*a*Math.cos(PI/3)-this.Rf[0],G[1]-this.Rf[1]);
+    const Cc=cc(T,a,this.Rf,Lr,1),B=[2*T[0]-Cc[0],2*T[1]-Cc[1]];return{th,T,Cc,B};},
+  update(phi){const q=this.geo(phi);this.g={phi,...q};this.trail=this.trail||[];this.trail.push(q.B);if(this.trail.length>300)this.trail.shift();},output(){return this.g.B[0]-this.G[0];},
+  draw(){const g=this.g,G=this.G,Rf=this.Rf;ctx.beginPath();ctx.rect(G[0]-70,40,140,110);ctx.rect(G[0]-58,50,116,90);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(G[0]-56,g.B[1]-150-28,112,22);paint(C['steel-fill'],C.ink);
+    bar(G[0],g.B[1]-160,g.B[0],g.B[1],10,C['steel-fill']);label('CYLINDER',G[0],30,'center');
+    ctx.save();ctx.strokeStyle=C.steel;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(G[0],160);ctx.lineTo(G[0],G[1]);ctx.stroke();ctx.restore();
+    if(this.trail.length>1){ctx.save();ctx.strokeStyle=C.hi;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(...this.trail[0]);for(const p of this.trail)ctx.lineTo(...p);ctx.stroke();ctx.restore();}
+    bar(G[0],G[1],g.T[0],g.T[1],18,C.part2);bar(Rf[0],Rf[1],g.Cc[0],g.Cc[1],10,C.part);bar(g.B[0],g.B[1],g.Cc[0],g.Cc[1],16,C['brass-fill']);
+    for(const p of [g.B,g.T,g.Cc])pivot(p[0],p[1],4.5);pivot(G[0],G[1],6);ground(G[0],G[1]+10,40);pivot(Rf[0],Rf[1],5);ground(Rf[0],Rf[1]-10,30,true);
+    label('ROCKING PILLAR',G[0]-20,G[1]-40,'right');label('RADIUS BAR',Rf[0]+14,Rf[1]+60);label('BEAM',(g.B[0]+g.Cc[0])/2+20,(g.B[1]+g.Cc[1])/2-14);
+    label('THE PISTON END OF THE BEAM MOVES ALMOST STRAIGHT UP AND DOWN',400,505,'center');},
+  reads(){const g=this.g;return[['Sideways error',`${(g.B[0]-this.G[0]).toFixed(1)} mm`],['Pillar',`${(g.th*180/PI).toFixed(0)}°`]];}});
+
+/* 342 · the chains hang from arch heads centred on the beam pivot, so each chain always leaves its arch at the same point and pulls
+   straight up and down */
+{const m=SIMS_NEW[342];m.draw=function(){const g=this.g,F=[400,140],R=170,xL=F[0]-R,xR=F[0]+R,sa=Math.sin(g.a);
+  ctx.beginPath();ctx.rect(F[0]-14,F[1],28,340);paint(C.part2,C.ink);
+  ctx.save();ctx.translate(F[0],F[1]);ctx.rotate(g.a);ctx.beginPath();ctx.rect(-R+6,-12,2*R-12,24);paint(C['brass-fill'],C.ink);
+  for(const [a0,a1] of [[PI-0.32,PI+0.36],[-0.36,0.32]]){ctx.beginPath();ctx.arc(0,0,R,a0,a1);ctx.arc(0,0,R-16,a1,a0,true);ctx.closePath();paint(C['brass-fill'],C.ink);}ctx.restore();pivot(F[0],F[1],7);
+  /* chains: from the top of each arch, round it to the level of the pivot, then straight down */
+  const chain=(a0,a1,end)=>{const pts=[];for(let i=0;i<=12;i++){const t=a0+(a1-a0)*i/12;pts.push([F[0]+R*Math.cos(t),F[1]+R*Math.sin(t)]);}pts.push(end);ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=3;ctx.setLineDash([5,3]);ctx.beginPath();ctx.moveTo(...pts[0]);for(const p of pts)ctx.lineTo(...p);ctx.stroke();ctx.restore();};
+  const py=300-R*sa,pr=330+R*sa;chain(PI+0.36+g.a,PI,[xL,py]);chain(-0.36+g.a,0,[xR,pr]);
+  ctx.beginPath();ctx.rect(xL-60,260,120,220);ctx.rect(xL-50,268,100,204);paint(C.part2,C.ink);steamBox(xL-50,py+20,100,472-py-20,!g.down);ctx.beginPath();ctx.rect(xL-50,py,100,20);paint(C['steel-fill'],C.ink);
+  bar(xR,pr,xR,480,8,C.part);label('CYLINDER',xL,500,'center');label('PUMP ROD',xR+14,470);label(g.down?'VACUUM BELOW · air pushes the piston down':'PUMP ROD WEIGHT LIFTS THE PISTON',400,40,'center');};}
+
+/* ================= audit pass 361–400 ================= */
+/* 361 · pin clutch: the belt pulley runs loose on the shaft and carries a pin on its face; a collar fixed on the shaft carries another.
+   The forked lever slides the pulley along until its pin reaches into the path of the collar's pin: as soon as the pulley pin comes
+   round to it, the shaft is picked up and turns with the pulley. Slide it back and the shaft stops. */
+reg({num:361,outLabel:'Shaft turns',d:0.35,
+  reset(){this.st=null;},
+  onAt(phi){return mod(phi,TAU*3)/(TAU*3)<0.55;},
+  update(phi){if(!this.st||phi<this.st.phi-1e-9)this.st={phi:0,a:-1.6,eng:false};const st=this.st,h=0.02;
+    while(st.phi<phi-1e-9){const s=Math.min(h,phi-st.phi);st.phi+=s;const on=this.onAt(st.phi);
+      if(on){if(st.eng)st.a=st.phi-this.d;else{const gap=mod(st.phi-this.d-st.a,TAU);if(gap<0.06){st.eng=true;st.a=st.phi-this.d;}}}else st.eng=false;}
+    const on=this.onAt(phi),sl=on?1:0;this.g={phi,a:st.a,on,eng:st.eng,sl};},
+  output(){return (this.g.a+1.6)/TAU;},
+  draw(){const g=this.g,y=280,X0=150,X1=700,xs=400+30*g.sl,xc=500,rp=44;
+    stripeShaft(X0,X1,y,10,g.a,C.part2);for(const x of [180,660]){ctx.beginPath();ctx.rect(x-12,y-14,24,190);paint(C.part2,C.ink);}
+    /* loose pulley with its hub groove and face pin */
+    drumH(xs-60,y,100,80,g.phi,C['brass-fill']);ctx.beginPath();ctx.rect(xs-150,y-26,40,52);paint(C['brass-fill'],C.ink);ctx.beginPath();ctx.rect(xs-138,y-26,14,52);paint(C.part,C.ink);
+    const pinP=(ang,x0,dir,len)=>{const yy=y-rp*Math.cos(ang),front=Math.sin(ang)>-0.2;ctx.save();ctx.globalAlpha=front?1:0.35;ctx.beginPath();ctx.rect(dir>0?x0:x0-len,yy-6,len,12);paint(C.hi,C.ink);ctx.restore();};
+    pinP(g.phi,xs-10,1,30);
+    /* collar fixed on the shaft, pin toward the pulley */
+    drumH(xc+20,y,40,56,g.a,C['steel-fill']);pinP(g.a,xc,-1,30);
+    /* belt */
+    ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(xs-100,y-80);ctx.lineTo(xs-100,40);ctx.moveTo(xs-20,y-80);ctx.lineTo(xs-20,40);ctx.stroke();ctx.restore();label('BELT',xs-60,34,'center');
+    /* forked lever */
+    const L=[xs-131,y-26],Pv=[300,120];bar(Pv[0],Pv[1],L[0],L[1]-30,10,C.part);bar(L[0],L[1]-30,L[0],L[1]+6,8,C.part);bar(Pv[0],Pv[1],Pv[0]-90,Pv[1]-70,10,C.part);pivot(Pv[0],Pv[1],5);ground(Pv[0],Pv[1]-10,30,true);label('LEVER',Pv[0]-100,Pv[1]-80,'center');
+    /* end view of the two pins */
+    const E=[650,110];circ(E[0],E[1],56);paint(C.sheet,C.ink,.8);for(const [ang,f] of [[g.phi,C.hi],[g.a,C['steel-fill']]]){circ(E[0]+rp*Math.sin(ang),E[1]-rp*Math.cos(ang),8);paint(f,C.ink);}pivot(E[0],E[1],4);label('END VIEW OF THE PINS',E[0],E[1]+74,'center');
+    label(g.on?(g.eng?'ENGAGED · pulley pin drives the collar pin':'SLID IN · waiting for the pins to meet'):'SLID OUT · pins clear, shaft stands',400,470,'center');label('PULLEY (loose)',xs-60,y+104,'center');label('COLLAR (fast)',xc+20,y+80,'center');},
+  reads(){const g=this.g;return[['Pulley',g.on?'slid in':'slid out'],['Shaft',g.eng?'driven':'standing'],['Shaft turns',`${((g.a+1.6)/TAU).toFixed(2)}`]];}});
+
+/* 362 · a drum on a sliding shaft has an endless groove cut slantwise round it; a fixed pin stands in the groove. As the shaft turns
+   (driven through a long pulley on a feather key) the slanted groove screws the drum and shaft one way for half a turn and back the
+   other way for the next half. */
+reg({num:362,outLabel:'Shaft position, mm',A:60,Rd:70,Xp:440,
+  update(phi){this.g={phi,x:-this.A*Math.cos(phi)};},output(){return this.g.x;},
+  draw(){const g=this.g,y=290,Rd=this.Rd,A=this.A,X=this.Xp+g.x,w=110;
+    stripeShaft(60+g.x,740+g.x,y,10,g.phi,C.part2);
+    drumH(150,y,90,50,g.phi,C['brass-fill']);label('LONG PULLEY (on a feather key)',150,y+80,'center');for(const x of [90,210,620,740]){ctx.beginPath();ctx.rect(x-8,y-14,16,170);paint(C.part2,C.ink);}
+    drumH(X,y,2*A+w,Rd,g.phi,C['steel-fill']);
+    /* the slanted groove: axial position A·cos(θ) at drum angle θ; front half drawn solid */
+    for(const s of [-1,1]){ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=1.4;ctx.beginPath();let pen=false;for(let i=0;i<=120;i++){const tw=i/120*PI,th=tw-g.phi,xx=X+A*Math.cos(th)+s*9,yy=y-Rd*Math.cos(tw);pen?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy);pen=true;}ctx.stroke();ctx.restore();}
+    ctx.beginPath();ctx.rect(this.Xp-14,y-Rd-70,28,60);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(this.Xp-7,y-Rd-14,14,20);paint(C.hi,C.ink);ground(this.Xp,y-Rd-70,60,true);label('FIXED PIN IN THE GROOVE',this.Xp+24,y-Rd-46);
+    label('THE SLANTED GROOVE MOVES THE DRUM AND SHAFT BACK AND FORTH ONCE A TURN',400,490,'center');},
+  reads(){return[['Shaft',`${this.g.x.toFixed(0)} mm`],['Stroke',`${2*this.A} mm per turn`]];}});
+
+/* 364 and 398 · exact one-pin drives with locking rims (Geneva type) */
+lockTooth(364,{N:12});SIMS_NEW[364].concept=true;
+lockTooth(398,{N:4});SIMS_NEW[398].concept=true;
+
+/* 372 · White's dynamometer: the driving shaft's bevel wheel and the driven shaft's bevel wheel face each other; bevel pinions between
+   them run on arms of a ring (the carrier). The pinions pass the drive across and the two shafts turn opposite ways; the carrier is
+   pressed round with twice the torque, and the weight hung on its arm to hold it level measures the power. */
+reg({num:372,outLabel:'Balance load, kg',O:[400,250],params:[{id:'p',label:'Power transmitted',min:0,max:100,step:1,value:50,fmt:v=>v+' %'}],
+  update(phi){this.g={phi,t:this.P.p/100,tilt:0.015*Math.sin(phi*3)};},output(){return this.g.t*20;},
+  draw(){const g=this.g,O=this.O,Rb=70,Rp=40;
+    const cone=(x0,dir,R,ang,fill)=>{/* bevel wheel seen from the side, axis horizontal, apex toward the centre */const x1=x0+dir*36;poly([[x0,O[1]-R],[x1,O[1]-R+36],[x1,O[1]+R-36],[x0,O[1]+R]]);ctx.closePath();paint(fill,C.ink);
+      ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=1;for(let k=0;k<16;k++){const a=ang+k*PI/8;if(Math.cos(a)<0.1)continue;const s=Math.sin(a);ctx.globalAlpha=.3+.6*Math.cos(a);ctx.beginPath();ctx.moveTo(x0,O[1]+R*s);ctx.lineTo(x1,O[1]+(R-36)*s);ctx.stroke();}ctx.restore();};
+    const pin=(dir,ang)=>{/* pinion axis vertical */const y0=O[1]+dir*(Rb+4),y1=O[1]+dir*(Rb-32);poly([[O[0]-Rp,y0],[O[0]+Rp,y0],[O[0]+Rp-30,y1],[O[0]-Rp+30,y1]]);ctx.closePath();paint(C.part,C.ink);
+      ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=1;for(let k=0;k<12;k++){const a=ang+k*PI/6;if(Math.cos(a)<0.1)continue;const s=Math.sin(a);ctx.globalAlpha=.3+.6*Math.cos(a);ctx.beginPath();ctx.moveTo(O[0]+Rp*s,y0);ctx.lineTo(O[0]+(Rp-30)*s,y1);ctx.stroke();}ctx.restore();};
+    stripeShaft(70,O[0]-70,O[1],12,g.phi,C.part2);stripeShaft(O[0]+70,730,O[1],12,-g.phi,C.part2);
+    cone(O[0]-74,1,Rb,g.phi,C['brass-fill']);cone(O[0]+74,-1,Rb,-g.phi,C['steel-fill']);
+    /* carrier ring with its arm */
+    ctx.save();ctx.translate(O[0],O[1]);ctx.rotate(g.tilt);ctx.beginPath();ctx.rect(-12,-Rb-40,24,2*Rb+80);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(0,-8,250,16);paint(C.part2,C.ink);ctx.restore();
+    pin(-1,g.phi*Rb/Rp);pin(1,-g.phi*Rb/Rp);
+    const W=[O[0]+240,O[1]+250*Math.sin(g.tilt)];rope([[W[0],W[1]],[W[0],W[1]+60]]);weight(W[0],W[1]+60,26+g.t*40,26+g.t*40,'');
+    label('DRIVING SHAFT',120,O[1]-30);label('DRIVEN SHAFT',640,O[1]-30);label('CARRIER',O[0],O[1]-Rb-52,'center');
+    label('THE WEIGHT THAT HOLDS THE CARRIER LEVEL MEASURES THE TURNING FORCE',400,480,'center');},
+  reads(){return[['Weight needed',`${(this.g.t*20).toFixed(1)} kg`],['Shafts','turn opposite ways, same speed']];}});
+
+/* 384 · volute drawer: a small wheel runs as a nut on a threaded arm pivoted at the centre. Swing the arm and the wheel rolls on the
+   paper; each turn of the wheel screws it one thread further out, and it turns faster the further out it is, so the pencil beside it
+   draws a widening (logarithmic) volute. */
+reg({num:384,outLabel:'Radius, mm',O:[400,265],r0:30,k:0.085,
+  reset(){this.trail=[];},
+  geo(phi){const t=mod(phi,6*PI);return{t,r:this.r0*Math.exp(this.k*t)};},
+  update(phi){const q=this.geo(phi);if(!this.trail||q.t<(this.g?this.g.t:0))this.trail=[];this.g={phi,...q};this.trail.push([this.O[0]+q.r*Math.cos(q.t),this.O[1]+q.r*Math.sin(q.t)]);},
+  output(){return this.g.r;},
+  draw(){const g=this.g,O=this.O,c=Math.cos(g.t),s=Math.sin(g.t);
+    if(this.trail.length>1){ctx.save();ctx.strokeStyle=C.steel;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(...this.trail[0]);for(const p of this.trail)ctx.lineTo(...p);ctx.stroke();ctx.restore();}
+    const E=[O[0]+235*c,O[1]+235*s];ctx.save();ctx.translate(O[0],O[1]);ctx.rotate(g.t);ctx.beginPath();ctx.rect(0,-6,235,12);paint(C['steel-fill'],C.ink);ctx.strokeStyle=C.ink;ctx.lineWidth=0.8;for(let x=8;x<230;x+=6){ctx.beginPath();ctx.moveTo(x,-6);ctx.lineTo(x+3,6);ctx.stroke();}
+    const wr=g.r;ctx.beginPath();ctx.rect(wr-8,-26,16,52);paint(C['brass-fill'],C.ink);const sp=g.t*g.r/24;for(let k=0;k<6;k++){const a=sp+k*PI/3;if(Math.cos(a)<0)continue;ctx.beginPath();ctx.moveTo(wr-8,26*Math.sin(a));ctx.lineTo(wr+8,26*Math.sin(a));ctx.stroke();}ctx.restore();
+    pivot(O[0],O[1],6);circ(O[0]+g.r*c,O[1]+g.r*s,4);paint(C.ink);label('THREADED ARM',E[0],E[1]-14,'center');
+    label('THE WHEEL ROLLS ON THE PAPER AND SCREWS ITSELF OUTWARD · a widening volute',400,505,'center');},
+  reads(){const g=this.g;return[['Radius',`${g.r.toFixed(0)} mm`],['Arm turns',`${(g.t/TAU).toFixed(2)}`]];}});
+
+/* 390 · a rocking lever turns a flywheel one way through two bands, two drums and two ratchets. Each drum runs loose on the shaft and
+   carries a pawl into its own ratchet, which is fast on the shaft. The bands are wound opposite ways, so one drum drives on the down
+   stroke and the other on the up stroke; small weights turn each drum back while its pawl slips. Side view, with end views below. */
+reg({num:390,outLabel:'Shaft, turns',F:[380,110],La:80,rd:40,N:20,r0:55,R:70,mu:0.12,
+  reset(){this.st=null;},
+  dA(phi){return this.La*Math.sin(0.35*Math.sin(phi))/this.rd;},
+  update(phi){const p=TAU/this.N;if(!this.st||phi<this.st.phi-1e-9)this.st={phi:0,wf:0,v:0,off:[0,0]};const st=this.st,dt=0.02;
+    while(st.phi<phi-1e-9){const h=Math.min(dt,phi-st.phi);st.phi+=h;st.v=Math.max(0,st.v-this.mu*h);st.wf+=st.v*h;const ds=[this.dA(st.phi),-this.dA(st.phi)];
+      for(let i=0;i<2;i++){if(ds[i]-st.wf>st.off[i]){const nw=ds[i]-st.off[i];st.v=Math.max(st.v,(nw-st.wf)/h*0.999);st.wf=nw;}}
+      for(let i=0;i<2;i++)while(ds[i]-st.wf<st.off[i]-p)st.off[i]-=p;}
+    const a=0.35*Math.sin(phi),ds=[this.dA(phi),-this.dA(phi)],dr=Math.cos(phi)>0?0:1;this.g={phi,a,w:st.wf,ds,act:dr};},
+  output(){return this.g.w/TAU;},
+  draw(){const g=this.g,F=this.F,La=this.La,y=280,xs=[300,460],{N,r0,R,rd}=this,RAT=SIMS_NEW[321].RAT;
+    stripeShaft(120,720,y,8,g.w,C.part2);for(const x of [140,560,700]){ctx.beginPath();ctx.rect(x-8,y-12,16,150);paint(C.part2,C.ink);}
+    drumH(640,y,26,130,g.w,C['steel-fill']);label('FLYWHEEL',640,y+150,'center');
+    for(let i=0;i<2;i++){const x=xs[i];drumH(x,y,40,rd,g.ds[i],C['brass-fill']);drumH(x+38,y,18,R,g.w,C['steel-fill']);}
+    ctx.save();ctx.translate(F[0],F[1]);ctx.rotate(g.a);ctx.beginPath();ctx.rect(-La-16,-9,2*La+32,18);paint(C['brass-fill'],C.ink);ctx.beginPath();ctx.rect(-6,-9,12,-70);paint(C.part,C.ink);ctx.restore();pivot(F[0],F[1],6);
+    for(let i=0;i<2;i++){const s=i?1:-1,E=[F[0]+s*La*Math.cos(g.a),F[1]+s*La*Math.sin(g.a)];rope([E,[xs[i]+(i?-1:1)*0,y-rd]]);
+      rope([[xs[i]+12,y+rd],[xs[i]+12,y+rd+40+rd*g.ds[i]*0.5]]);weight(xs[i]+12,y+rd+40+rd*g.ds[i]*0.5,22,22,'');}
+    /* end views */
+    for(let i=0;i<2;i++){const C0=[i?560:200,450],k=0.5,d=g.ds[i],w=g.w,at=(a,r)=>[C0[0]+k*r*Math.cos(a),C0[1]+k*r*Math.sin(a)];
+      poly(RAT.pts(N,r0,R,-1).map(([x,y])=>{const c=Math.cos(w),s=Math.sin(w);return[C0[0]+k*(x*c-y*s),C0[1]+k*(x*s+y*c)];}));ctx.closePath();paint(C['steel-fill'],C.ink);
+      bar(C0[0],C0[1],...at(d,96),9,C['brass-fill']);circ(C0[0],C0[1],k*rd);paint(C['brass-fill'],C.ink);
+      const b=RAT.pawl(N,r0,R,-1,w-d,[92,0],48,-3.1,-1.8),Pv=at(d,92),T=[Pv[0]+k*48*Math.cos(b+d),Pv[1]+k*48*Math.sin(b+d)];bar(...Pv,...T,5,i===g.act?C.hi:C.part);pivot(...Pv,2.5);
+      label(i?'RIGHT DRUM':'LEFT DRUM',C0[0]+60,C0[1]-20);}
+    label('BANDS WOUND OPPOSITE WAYS · one drum drives each stroke',400,30,'center');},
+  reads(){const g=this.g;return[['Shaft turns',`${(g.w/TAU).toFixed(2)}`],['Driving',g.act?'right drum':'left drum']];}});
+
+/* 391 · two weighted racks take turns: the rack that is falling is swung into mesh and drives the gear by its weight, while the other is
+   swung clear and drawn up. Both mesh on the same side, so both drive the gear the same way and it turns continuously. */
+reg({num:391,outLabel:'Gear turns',concept:true,Pg:[440,270],Rg:50,S:8*PI*100/18,
+  update(phi){const u=mod(phi,TAU)/TAU,cyc=Math.floor(phi/TAU),S=this.S;const fA=u<0.5?u/0.5:1-(u-0.5)/0.5,fB=1-fA;/* fall fractions */
+    const sw=x=>smooth(Math.min(1,Math.max(0,x)));const inA=u<0.5?1-sw((u-0.46)/0.04)*0:0,inB=u<0.5?0:1;
+    const fall=(cyc*2+(u<0.5?u/0.5:1+(u-0.5)/0.5))*S;this.g={phi,yA:fA*S,yB:fB*S,inA:u<0.5?1:0,w:-fall/this.Rg,u};},
+  output(){return -this.g.w/TAU;},
+  draw(){const g=this.g,P=this.Pg,Rg=this.Rg,m=2*Rg/18,xm=P[0]-Rg;drawGear(P[0],P[1],Rg,18,g.w,C['brass-fill'],{bore:6});pivot(P[0],P[1],5);
+    const rack=(y0,inMesh,front,label_)=>{const x=inMesh?xm:xm-36,top=P[1]-170+y0,pts=[[x-1.25*m-16,top]];const p=PI*m,c0=mod(170-p/2,p)+p;for(let k=0;k<12;k++){const yc=top+c0+k*p,a=p/4,t=Math.tan(20*PI/180);pts.push([x-1.25*m,yc-a-1.25*m*t],[x+m,yc-a+m*t],[x+m,yc+a-m*t],[x-1.25*m,yc+a+1.25*m*t]);}const bot=top+c0+12*p;pts.push([x-1.25*m,bot],[x-1.25*m-16,bot]);
+      ctx.save();ctx.globalAlpha=front?1:0.55;poly(pts);ctx.closePath();paint(inMesh?C['steel-fill']:C.part,C.ink);weight(x-1.25*m-8,bot,40,40,'');rope([[x-1.25*m-8,top],[x-1.25*m-8,60]]);ctx.restore();label(label_,x-60,top+20,'right');return bot;};
+    rack(g.yA,g.inA===1,true,'FRONT RACK');rack(g.yB,g.inA===0,false,'REAR RACK');
+    label(g.inA?'FRONT RACK FALLING IN MESH · rear rack swung clear and drawn up':'REAR RACK FALLING IN MESH · front rack swung clear and drawn up',400,40,'center');label('both racks mesh on the same side, so the gear always turns the same way',400,500,'center');},
+  reads(){const g=this.g;return[['Driving',g.inA?'front rack':'rear rack'],['Gear','turns one way']];}});
+
+/* 397 · the crank pin works in a slot that is straight above and below and opens into two arcs, each struck from the crank centre with
+   the yoke at one end of its stroke. While the pin runs on an arc the yoke stands still, so the shuttle pauses at each end. */
+reg({num:397,outLabel:'Shuttle position, mm',concept:true,O:[200,300],r:90,al:0.6,
+  xe(){return this.r*Math.cos(this.al);},
+  update(phi){const x=Math.max(-this.xe(),Math.min(this.xe(),this.r*Math.cos(phi)));this.g={phi,x,dwell:Math.abs(this.r*Math.cos(phi))>this.xe()};},output(){return this.g.x;},
+  slot(){const r=this.r,al=this.al,xe=this.xe(),o=[];const top=r+24,ya=r*Math.sin(al);/* centre line of the slot, yoke-local */
+    o.push([0,-top],[0,-ya]);for(let i=1;i<=20;i++){const t=-al+2*al*i/20;o.push([-xe+r*Math.cos(t),r*Math.sin(t)*-1*-1]);}o.push([0,top]);return o;},
+  draw(){const g=this.g,O=this.O,r=this.r,al=this.al,xe=this.xe(),X=O[0]+g.x,pin=[O[0]+r*Math.cos(g.phi),O[1]+r*Math.sin(g.phi)];
+    circ(O[0],O[1],r+24);paint(C['brass-fill'],C.ink);bar(O[0],O[1],pin[0],pin[1],14,C.part2);pivot(O[0],O[1],6);
+    ctx.beginPath();ctx.rect(X-r-14,O[1]-r-40,2*r+28,2*r+80);paint(C['steel-fill'],C.ink,.9);
+    /* slot: straight tails and the two arcs */
+    const ya=r*Math.sin(al);ctx.save();ctx.translate(X,O[1]);ctx.lineCap='round';ctx.lineWidth=20;ctx.strokeStyle=C.ink;
+    const path=()=>{ctx.beginPath();ctx.moveTo(0,-r-24);ctx.lineTo(0,-ya);ctx.arc(-xe,0,r,-al,al);ctx.lineTo(0,r+24);ctx.moveTo(0,-ya);ctx.arc(xe,0,r,PI+al,PI-al,true);};
+    path();ctx.stroke();ctx.lineWidth=17;ctx.strokeStyle=C.sheet;path();ctx.stroke();ctx.restore();
+    circ(pin[0],pin[1],8);paint(C.hi,C.ink);
+    bar(X+r+14,O[1],X+r+150,O[1],10,C.part);ctx.beginPath();ctx.rect(O[0]+r+60,O[1]-28,330,8);ctx.rect(O[0]+r+60,O[1]+20,330,8);paint(C.part2,C.ink);
+    const S=X+r+150;ctx.beginPath();ctx.moveTo(S,O[1]);ctx.quadraticCurveTo(S+40,O[1]-24,S+90,O[1]);ctx.quadraticCurveTo(S+40,O[1]+24,S,O[1]);paint(C['brass-fill'],C.ink);label('SHUTTLE',S+45,O[1]-36,'center');
+    label(g.dwell?'PIN ON AN ARC · the shuttle pauses':'PIN IN THE STRAIGHT SLOT · the shuttle moves',400,470,'center');label('arcs are struck from the crank centre',400,492,'center');},
+  reads(){const g=this.g;return[['Shuttle',`${g.x.toFixed(0)} mm`],['Phase',g.dwell?'pause':'moving'],['Pause',`${(2*this.al*180/PI).toFixed(0)}° of each turn at each end`]];}});
+
+/* 366 · drill press: the driving shaft's bevel pinion turns a bevel wheel whose bore has a feather; the drill spindle slides through
+   it while it turns. A lever pivoted on the frame forks a collar on the spindle; a rod from the treadle pulls its other end, so treading
+   lowers the drill into the work and a spring lifts it again. */
+reg({num:366,outLabel:'Drill depth, mm',X:360,F:[640,200],
+  update(phi){const d=60*(1-Math.cos(phi*0.3))/2;this.g={phi,d,b:Math.atan2(d,this.F[0]-this.X)};},output(){return this.g.d;},
+  draw(){const g=this.g,X=this.X,F=this.F,yb=120,Lr=F[0]-X;
+    ctx.beginPath();ctx.rect(X-130,60,30,420);ctx.rect(X-130,60,260,18);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(X-100,420,260,24);paint(C.part2,C.ink);label('TABLE',X+150,412);
+    /* bevel wheel, axis vertical, and the pinion on the driving shaft */
+    poly([[X-70,yb],[X+70,yb],[X+40,yb+30],[X-40,yb+30]]);ctx.closePath();paint(C['brass-fill'],C.ink);ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=1;for(let k=0;k<12;k++){const a=g.phi+k*PI/6;if(Math.cos(a)<0.1)continue;ctx.globalAlpha=.3+.6*Math.cos(a);ctx.beginPath();ctx.moveTo(X+70*Math.sin(a),yb);ctx.lineTo(X+40*Math.sin(a),yb+30);ctx.stroke();}ctx.restore();
+    poly([[X+100,yb-34],[X+100,yb+40],[X+72,yb+26],[X+72,yb-20]]);ctx.closePath();paint(C.part,C.ink);stripeShaft(X+100,X+300,yb+3,9,-g.phi*70/37,C.part2);drumH(X+300,yb+3,30,40,-g.phi*70/37,C['steel-fill']);label('DRIVING SHAFT',X+230,yb-40,'center');
+    /* spindle sliding through the wheel, collar and drill */
+    const ys=yb-40+g.d;ctx.beginPath();ctx.rect(X-8,ys,16,260);paint(C['steel-fill'],C.ink);ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=1;for(let k=0;k<6;k++){const a=g.phi+k*PI/3;if(Math.cos(a)<0)continue;const xx=X+8*Math.sin(a);ctx.beginPath();ctx.moveTo(xx,ys);ctx.lineTo(xx,ys+250);ctx.stroke();}ctx.restore();
+    const yc=200+g.d;ctx.beginPath();ctx.rect(X-20,yc-12,40,24);paint(C.part,C.ink);poly([[X-6,ys+260],[X+6,ys+260],[X,ys+290]]);ctx.closePath();paint(C.ink);
+    ctx.beginPath();ctx.rect(X-60,404,120,16);paint(C['brass-fill'],C.ink);label('WORK',X,415,'center');
+    /* lever, rod and treadle */
+    const L=Math.hypot(X-F[0],yc-F[1]),u=[(X-F[0])/L,(yc-F[1])/L],Rm=[F[0]+90*u[0],F[1]+90*u[1]];bar(F[0],F[1],X,yc,12,C.part2);pivot(F[0],F[1],6);ground(F[0],F[1]-12,30,true);pivot(Rm[0],Rm[1],4);
+    const T0=[760,470],Tp=[Rm[0],Rm[1]+230];bar(T0[0],T0[1],Tp[0]-30,Tp[1],14,C['brass-fill']);pivot(T0[0],T0[1],6);bar(Rm[0],Rm[1],Tp[0],Tp[1],6,C.part);label('TREADLE',T0[0]-60,T0[1]+26,'center');label('LEVER',F[0]-60,F[1]-16,'center');
+    springZ(X+14,yb+40,X+14,yc-12,8,6);
+    label('THE SPINDLE SLIDES THROUGH THE TURNING BEVEL WHEEL · treading feeds the drill down',400,505,'center');},
+  reads(){return[['Depth',`${this.g.d.toFixed(0)} mm`],['Spindle','turns and slides at once']];}});
+
+/* 379, 380 · cramp drills. The cramp's lower jaw holds the work; the drill spindle runs in the upper arm and is turned by a crank.
+   379: the feed screw stands above the spindle, end to end with it, and is screwed down from a nut in the frame to push the drill on.
+   380: the feed screw is hollow and threaded in the upper arm; the spindle runs through it and is pushed down by a collar. */
+function crampDrill(num,o){return reg({num,outLabel:'Drill feed, mm',X:330,
+  update(phi){const d=40*mod(phi,TAU*6)/(TAU*6);this.g={phi,d,s:d/6*TAU};},output(){return this.g.d;},
+  draw(){const g=this.g,X=this.X,yA=200,d=g.d;
+    ctx.beginPath();ctx.moveTo(180,110);ctx.lineTo(640,110);ctx.lineTo(640,470);ctx.lineTo(180,470);ctx.lineTo(180,420);ctx.lineTo(580,420);ctx.lineTo(580,yA+20);ctx.lineTo(180,yA+20);ctx.closePath();paint(C.part2,C.ink);
+    ctx.beginPath();ctx.rect(200,360,300,60);paint(C['brass-fill'],C.ink);label('WORK',350,395,'center');
+    const yS=yA-30+d;/* top of the spindle */
+    ctx.beginPath();ctx.rect(X-10,yS,20,120);paint(C['steel-fill'],C.ink);ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=1;for(let k=0;k<6;k++){const a=g.phi+k*PI/3;if(Math.cos(a)<0)continue;const xx=X+10*Math.sin(a);ctx.beginPath();ctx.moveTo(xx,yS);ctx.lineTo(xx,yS+115);ctx.stroke();}ctx.restore();
+    poly([[X-7,yS+120],[X+7,yS+120],[X,yS+155]]);ctx.closePath();paint(C.ink);
+    const crankAt=(y)=>{const c=Math.cos(g.phi);bar(X,y,X+70*c,y,10,C['brass-fill']);bar(X+70*c,y,X+70*c,y-40,10,C['brass-fill']);circ(X,y,9);paint(C.part,C.ink);};
+    if(o.through){/* hollow feed screw threaded in the arm, spindle through it; collar under the screw */
+      const yF=yA-60+d;screwShaftV(X,yF,yF+80,22,g.s);drumH(X,yF-6,70,10,g.s,C.part);label('HOLLOW FEED SCREW',X+50,yF+20);ctx.beginPath();ctx.rect(X-24,yF+80,48,10);paint(C.hi,C.ink);crankAt(yF-40);
+      ctx.beginPath();ctx.rect(X-10,yF-40,20,yS-yF+40);paint(C['steel-fill'],C.ink);}
+    else{/* feed screw end to end above the spindle, in a nut on a bracket */
+      ctx.beginPath();ctx.rect(X-60,90,120,20);paint(C.part2,C.ink);const yF=yA-110+d;screwShaftV(X,yF-60,yF+50,20,g.s);drumH(X,yF-66,80,10,g.s,C.part);label('FEED SCREW',X+60,yF-60);crankAt(yS+30);}
+    label(o.label,400,500,'center');},
+  reads(){return[['Feed',`${this.g.d.toFixed(1)} mm`]];}});}
+function screwShaftV(x,y0,y1,w,ang){ctx.beginPath();ctx.rect(x-w/2,y0,w,y1-y0);paint(C['steel-fill'],C.ink);ctx.save();ctx.beginPath();ctx.rect(x-w/2,y0,w,y1-y0);ctx.clip();ctx.strokeStyle=C.ink;ctx.lineWidth=1;const p=8;for(let y=y0-p+mod(-ang/TAU*p,p);y<y1+p;y+=p){ctx.beginPath();ctx.moveTo(x-w/2,y);ctx.lineTo(x+w/2,y+3);ctx.stroke();}ctx.restore();}
+crampDrill(379,{label:'CRAMP DRILL · the feed screw stands opposite the drill, end to end with the spindle'});
+crampDrill(380,{through:true,label:'CRAMP DRILL · the spindle runs through the hollow feed screw'});
+
+/* 381 · joiner's clamp with a wedge: the work lies between a fixed stop and a sliding jaw; driving the wedge down between the jaw and
+   the fixed post pushes the jaw against the work (half the wedge's travel, for a 1-in-2 taper). */
+reg({num:381,outLabel:'Jaw closure, %',
+  update(phi){const c=openClose(phi),d=60*(1-c);this.g={phi,c,d,yT:215+2*d};},output(){return this.g.c*100;},
+  draw(){const g=this.g,d=g.d,yT=g.yT;ctx.beginPath();ctx.rect(80,330,460,40);ctx.rect(590,330,130,40);paint(C.part2,C.ink);
+    ctx.beginPath();ctx.rect(300,220,30,110);paint(C.part,C.ink);ctx.beginPath();ctx.rect(330,280,140,50);paint(C['brass-fill'],C.ink);label('WORK',400,305,'center');
+    ctx.beginPath();ctx.rect(470+d,240,30,90);paint(C['steel-fill'],C.ink);ctx.beginPath();ctx.rect(560,180,30,190);paint(C.part2,C.ink);
+    poly([[530,yT],[560,yT],[560,yT+140],[530-70,yT+140]]);ctx.closePath();paint(C['brass-fill'],C.ink);
+    label('FIXED STOP',315,205,'center');label('SLIDING JAW',485+d,230,'center');label('WEDGE',545,yT-10,'center');label('POST',575,170,'center');
+    label(g.c>0.98?'CLAMPED':g.c<0.02?'OPEN':'DRIVING THE WEDGE / KNOCKING IT BACK',400,420,'center');label("JOINER'S CLAMP · a 1-in-2 wedge drives the jaw half as far as the wedge goes",400,480,'center');},
+  reads(){const g=this.g;return[['Jaw gap',`${g.d.toFixed(0)} mm`],['Wedge travel',`${(2*g.d).toFixed(0)} mm`]];}});
+
+/* 385 · door closer, seen from above: a link of fixed length joins the door to a slide; opening the door draws the slide away from the
+   pulley, lifting the weight that hangs from the cord; let go and the weight pulls the slide back and the door shut. */
+reg({num:385,outLabel:'Door angle, degrees',H:[200,300],Lk:130,T0:290,
+  geo(a){const H=this.H,K=[H[0]+80*Math.cos(-a),H[1]+80*Math.sin(-a)],Ty=K[1]+Math.sqrt(this.Lk**2-(this.T0-K[0])**2);return{K,T:[this.T0,Ty]};},
+  update(phi){const u=mod(phi*0.5,TAU)/TAU;const f=u<0.3?smooth(u/0.3):u<0.45?1:1-smooth((u-0.45)/0.45);const a=f*1.3;this.g={phi,a,...this.geo(a)};},output(){return this.g.a*180/PI;},
+  draw(){const g=this.g,H=this.H,T=g.T,Pu=[this.T0,490],T0=this.geo(0).T;
+    ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=12;ctx.beginPath();ctx.moveTo(60,300);ctx.lineTo(H[0]-10,300);ctx.moveTo(H[0]+310,300);ctx.lineTo(760,300);ctx.stroke();ctx.restore();
+    ctx.beginPath();ctx.rect(T[0]-30,320,8,150);ctx.rect(T[0]+22,320,8,150);paint(C.part2,C.ink);
+    const D=[H[0]+300*Math.cos(-g.a),H[1]+300*Math.sin(-g.a)];bar(H[0],H[1],D[0],D[1],14,C['brass-fill']);pivot(H[0],H[1],6);
+    rope([[T[0],T[1]+20],Pu]);circ(Pu[0],Pu[1],10);paint(C.part,C.ink);ctx.beginPath();ctx.rect(Pu[0]+14,Pu[1]-14,28,28);paint(C['steel-fill'],C.ink);label('WEIGHT HANGS HERE',Pu[0]+50,Pu[1]+4);
+    ctx.beginPath();ctx.rect(T[0]-20,T[1]-20,40,40);paint(C['steel-fill'],C.ink);bar(g.K[0],g.K[1],T[0],T[1],8,C.part);pivot(g.K[0],g.K[1],4);pivot(T[0],T[1],4);
+    label('SLIDE',T[0]-40,T[1],'right');label(`weight raised ${(T0[1]-T[1]).toFixed(0)} mm`,560,420);
+    label('SEEN FROM ABOVE · opening the door draws the slide away and lifts the weight, which then pulls the door shut',400,40,'center');},
+  reads(){const g=this.g;return[['Door',`${(g.a*180/PI).toFixed(0)}°`],['Weight raised',`${(this.geo(0).T[1]-g.T[1]).toFixed(0)} mm`]];}});
+
+/* ================= audit pass 401–440 ================= */
+/* 402 · two balances geared together turn in opposite directions, so a jolt that would speed one slows the other and the pair is
+   undisturbed; one of them carries the half-cylinder of a cylinder escapement, which the escape wheel works through. */
+cylEsc(402,{E:[400,390],R:85,label:'TWIN BALANCES GEARED TOGETHER · a jolt cannot disturb both',concept:true,br:14});
+{const m=SIMS_NEW[402],base=m.draw;m.draw=function(){base.call(this);const G=this.G,g=this.g,A=[G.Cc[0],G.Cc[1]-130],B=[A[0]+150,A[1]],rg=75;
+  drawGear(A[0],A[1],rg,30,g.th,C.part,{bore:6});drawGear(B[0],B[1],rg,30,-g.th+PI/30,C.part,{bore:6});balanceW(A,62,g.th);balanceW(B,62,-g.th);pivot(A[0],A[1],5);pivot(B[0],B[1],5);
+  label('BALANCE ON THE CYLINDER STAFF',A[0]-80,A[1]-90,'center');label('SECOND BALANCE',B[0]+40,B[1]-90,'center');};
+ m.reads=function(){const g=this.g,G=this.G;return[['Left balance',`${(g.th*180/PI).toFixed(0)}°`],['Right balance',`${(-g.th*180/PI).toFixed(0)}°`],['Escape wheel',`${(g.W/G.p).toFixed(2)} teeth`]];};}
+
+/* 403 · cyclograph: two straight arms joined at a fixed angle slide against two fixed pins; by the inscribed-angle property the joint
+   (where the pencil is) moves on a circular arc through the pins, however large its radius */
+reg({num:403,outLabel:'Pencil height, mm',concept:true,A:[230,400],B:[570,400],gam:PI-0.32,
+  reset(){this.trail=[];},
+  geo(phi){const A=this.A,B=this.B,h=(B[0]-A[0])/2,R=h/Math.sin(PI-this.gam),C0=[(A[0]+B[0])/2,A[1]+Math.sqrt(R*R-h*h)],am=Math.asin(h/R)*0.85,a=am*Math.sin(phi*0.5);return{R,C0,a,P:[C0[0]+R*Math.sin(a),C0[1]-R*Math.cos(a)]};},
+  update(phi){const q=this.geo(phi);this.g={phi,...q};this.trail=this.trail||[];this.trail.push(q.P);if(this.trail.length>400)this.trail.shift();},output(){return 400-this.g.P[1];},
+  draw(){const g=this.g,A=this.A,B=this.B,P=g.P;ctx.save();ctx.strokeStyle=C.rule;ctx.setLineDash([4,5]);ctx.beginPath();ctx.arc(g.C0[0],g.C0[1],g.R,-PI/2-0.32,-PI/2+0.32);ctx.stroke();ctx.restore();
+    if(this.trail.length>1){ctx.save();ctx.strokeStyle=C.steel;ctx.lineWidth=2.2;ctx.beginPath();ctx.moveTo(...this.trail[0]);for(const q of this.trail)ctx.lineTo(...q);ctx.stroke();ctx.restore();}
+    for(const Q of [A,B]){const d=[Q[0]-P[0],Q[1]-P[1]],L=Math.hypot(...d),u=[d[0]/L,d[1]/L],E=[P[0]+u[0]*(L+70),P[1]+u[1]*(L+70)];ctx.save();ctx.translate(P[0],P[1]);ctx.rotate(Math.atan2(u[1],u[0]));ctx.beginPath();ctx.rect(0,0,L+70,14);paint(C['brass-fill'],C.ink);ctx.restore();}
+    for(const Q of [A,B]){circ(Q[0],Q[1],6);paint(C.ink);}circ(P[0],P[1],6);paint(C.hi,C.ink);label('FIXED PINS',400,430,'center');label('PENCIL AT THE JOINT',P[0],P[1]-18,'center');
+    label('ARMS AT A FIXED ANGLE SLIDING ON TWO PINS · the joint draws an arc of great radius',400,495,'center');},
+  reads(){const g=this.g;return[['Arc radius',`${g.R.toFixed(0)} mm`],['Arm angle',`${(this.gam*180/PI).toFixed(0)}°`]];}});
+
+/* 419 · a self-rocking cradle: a clockwork-driven wheel carries a crank pin, and a rod from it to an arm on the cradle rocks the cradle
+   to and fro (a crank-and-rocker four-bar) */
+reg({num:419,outLabel:'Cradle angle, degrees',concept:true,Pv:[400,120],O:[640,380],r:26,La:200,
+  geo(phi){const O=this.O,Pv=this.Pv,pin=[O[0]+this.r*Math.cos(phi),O[1]+this.r*Math.sin(phi)],Qr=[Pv[0]+120,Pv[1]+this.La],Lr=Math.hypot(O[0]-Qr[0],O[1]-Qr[1]),R=Math.hypot(120,this.La),Qa=Math.atan2(this.La,120);
+    const Q=cc(Pv,R,pin,Lr,1);return{pin,Q,a:Math.atan2(Q[1]-Pv[1],Q[0]-Pv[0])-Qa};},
+  update(phi){this.g={phi,...this.geo(phi)};},output(){return this.g.a*180/PI;},
+  draw(){const g=this.g,P=this.Pv,O=this.O;ctx.save();ctx.translate(P[0],P[1]);ctx.rotate(g.a);bar(0,0,0,150,8,C.part);ctx.beginPath();ctx.moveTo(-160,150);ctx.lineTo(160,150);ctx.quadraticCurveTo(140,260,0,270);ctx.quadraticCurveTo(-140,260,-160,150);paint(C['brass-fill'],C.ink);bar(0,150,120,this.La,10,C.part2);ctx.restore();pivot(P[0],P[1],6);ground(P[0],P[1]-10,40,true);
+    ctx.beginPath();ctx.rect(O[0]-70,O[1]-70,140,150);paint(C.part2,C.ink,.8);label('CLOCKWORK',O[0],O[1]+95,'center');flywheel(O[0],O[1],50,g.phi);bar(O[0],O[1],g.pin[0],g.pin[1],10,C['brass-fill']);bar(g.pin[0],g.pin[1],g.Q[0],g.Q[1],8,C.part);pivot(g.pin[0],g.pin[1],4);pivot(g.Q[0],g.Q[1],4);
+    label('A CRANK DRIVEN BY CLOCKWORK ROCKS THE CRADLE BY A ROD',400,490,'center');},
+  reads(){return[['Rock',`${(this.g.a*180/PI).toFixed(1)}°`]];}});
+
+/* 408 · centrolinead: a straight-edge with two arms set at fixed angles to it; the arms slide against two pins. The joint of the arms
+   runs on the circle through the two pins and the vanishing point, and the edge always points at that point however far off it is. */
+reg({num:408,outLabel:'Edge angle, degrees',concept:true,A:[230,170],B:[230,350],V:[1700,260],
+  circle(){const [A,B,V]=[this.A,this.B,this.V],ax=A[0],ay=A[1],bx=B[0],by=B[1],cx=V[0],cy=V[1],d=2*(ax*(by-cy)+bx*(cy-ay)+cx*(ay-by)),ux=((ax*ax+ay*ay)*(by-cy)+(bx*bx+by*by)*(cy-ay)+(cx*cx+cy*cy)*(ay-by))/d,uy=((ax*ax+ay*ay)*(cx-bx)+(bx*bx+by*by)*(ax-cx)+(cx*cx+cy*cy)*(bx-ax))/d;return{C:[ux,uy],R:Math.hypot(ax-ux,ay-uy)};},
+  update(phi){const q=this.circle(),a0=Math.atan2(260-q.C[1],150-q.C[0]),a=PI+0.07*Math.sin(phi*0.5),H=[q.C[0]+q.R*Math.cos(a),q.C[1]+q.R*Math.sin(a)];this.g={phi,H,ang:Math.atan2(this.V[1]-H[1],this.V[0]-H[0])};},
+  output(){return this.g.ang*180/PI;},
+  draw(){const g=this.g,H=g.H,V=this.V;for(let k=-4;k<=4;k++){ctx.save();ctx.strokeStyle=C.rule;ctx.beginPath();ctx.moveTo(100,260+k*60);ctx.lineTo(800,260+k*60*(V[0]-800)/(V[0]-100));ctx.stroke();ctx.restore();}
+    ctx.save();ctx.translate(H[0],H[1]);ctx.rotate(g.ang);ctx.beginPath();ctx.rect(0,-8,600,16);paint(C['brass-fill'],C.ink);ctx.restore();
+    for(const Q of [this.A,this.B]){const d=[Q[0]-H[0],Q[1]-H[1]],L=Math.hypot(...d);ctx.save();ctx.translate(H[0],H[1]);ctx.rotate(Math.atan2(d[1],d[0]));ctx.beginPath();ctx.rect(0,-7,L+50,14);paint(C['steel-fill'],C.ink);ctx.restore();circ(Q[0],Q[1],6);paint(C.ink);}
+    pivot(H[0],H[1],5);label('PINS',this.A[0]+16,this.A[1]-10);label('EDGE POINTS TO A VANISHING POINT FAR OFF THE BOARD',500,60,'center');label('CENTROLINEAD · the arms slide on two pins; every line ruled runs to the same far point',400,495,'center');},
+  reads(){return[['Edge',`${(this.g.ang*180/PI).toFixed(1)}°`],['Vanishing point','1.5 m off the board']];}});
+
+/* 412 · the head and the drum: the bars turn the head; single purchase turns the drum with it, triple purchase drives it through a
+   reverted pair of gear trains in the base (12→18 and 10→20) so it turns a third as fast with three times the pull */
+{const m=SIMS_NEW[412];m.update=function(phi){const h=phi*0.3;this.g={phi,h,d:h/this.P.m};};
+ m.draw=function(){const g=this.g,O=[400,250],tri=this.P.m===3;ctx.beginPath();ctx.rect(O[0]-120,O[1]+170,240,30);paint(C.part2,C.ink);
+  circ(O[0],O[1],100);paint(C['brass-fill'],C.ink);ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=1;for(let k=0;k<10;k++){const a=g.d+k*PI/5;ctx.beginPath();ctx.moveTo(O[0]+60*Math.cos(a),O[1]+60*Math.sin(a));ctx.lineTo(O[0]+100*Math.cos(a),O[1]+100*Math.sin(a));ctx.stroke();}ctx.restore();label('DRUM',O[0]+70,O[1]+110);
+  for(let k=0;k<6;k++){const a=g.h+k*PI/3;bar(O[0],O[1],O[0]+230*Math.cos(a),O[1]+230*Math.sin(a)*0.35,10,C.part2);}circ(O[0],O[1],46);paint(C['steel-fill'],C.ink);pivot(O[0],O[1],6);label('HEAD AND BARS',O[0]-160,O[1]-50,'center');
+  const G=[O[0]+170,O[1]+120];if(tri){drawGear(O[0]+90,O[1]+120,27,12,g.h,C.part,{bore:4});drawGear(G[0],G[1],40.5,18,-g.h*12/18+PI/18,C['steel-fill'],{bore:4});label('12 → 18 and 10 → 20 · ratio 3',O[0]+150,O[1]+175,'center');}
+  label(tri?'TRIPLE PURCHASE · the drum turns a third as fast, with three times the pull':'SINGLE PURCHASE · head and drum locked together',400,40,'center');};}
+
+/* 422 · sector engine: the piston is a vane swinging in a sector-shaped cylinder; its shaft carries an arm (set at a fixed angle to the
+   vane) which drives the crank by a connecting rod, so vane and arm turn together */
+{const m=SIMS_NEW[422];m.dOff=function(){if(this._d===undefined){let lo=1e9,hi=-1e9;for(let i=0;i<72;i++){const p=i/72*TAU,O=[560,330],pin=[O[0]+60*Math.cos(p),O[1]+60*Math.sin(p)],T=cc([250,330],200,pin,240,-1),t=Math.atan2(T[1]-330,T[0]-250);lo=Math.min(lo,t);hi=Math.max(hi,t);}this._d=-PI/2-(lo+hi)/2;}return this._d;};
+ m.draw=function(){const g=this.g,A=g.A,v=g.th+this.dOff();ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.arc(A[0],A[1],180,-PI/2-0.9,-PI/2+0.9);ctx.closePath();paint(C.part2,C.ink);ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.arc(A[0],A[1],166,-PI/2-0.85,-PI/2+0.85);ctx.closePath();paint(C.sheet,C.ink);
+  ctx.save();ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.arc(A[0],A[1],166,-PI/2-0.85,v);ctx.closePath();ctx.fillStyle=STEAM();ctx.globalAlpha=.6;ctx.fill();ctx.restore();
+  bar(A[0],A[1],A[0]+166*Math.cos(v),A[1]+166*Math.sin(v),12,C['steel-fill']);bar(A[0],A[1],g.T[0],g.T[1],12,C.part);flywheel(g.O[0],g.O[1],90,g.phi);bar(g.T[0],g.T[1],g.pin[0],g.pin[1],10,C.part);bar(g.O[0],g.O[1],g.pin[0],g.pin[1],14,C['brass-fill']);
+  pivot(A[0],A[1],6);pivot(g.T[0],g.T[1],4);pivot(g.pin[0],g.pin[1],4);label('SECTOR CYLINDER · the vane and the arm are fast on one shaft',A[0]+40,A[1]+40,'center');};}
+
+/* 423 · Root's double-quadrant engine: two vane pistons on one rocking shaft swing in two opposite quadrant cylinders; an arm on the
+   shaft drives the crank through a rod of fixed length (crank and rocker) */
+reg({num:423,outLabel:"Crank turns",concept:true,A:[300,280],O:[600,170],r:50,La:125,
+  geo(phi){const A=this.A,O=this.O,pin=[O[0]+this.r*Math.cos(phi),O[1]+this.r*Math.sin(phi)],E0=[A[0],A[1]-this.La],Lr=Math.hypot(O[0]-E0[0],O[1]-E0[1]),E=cc(A,this.La,pin,Lr,-1);return{pin,E,th:Math.atan2(E[1]-A[1],E[0]-A[0])+PI/2};},
+  update(phi){this.g={phi,...this.geo(phi)};},output(){return this.g.phi/TAU;},
+  draw(){const g=this.g,A=this.A,O=this.O;for(const s of [-1,1]){ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.arc(A[0],A[1],170,s>0?-0.7:PI-0.7,s>0?0.7:PI+0.7);ctx.closePath();paint(C.part2,C.ink);ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.arc(A[0],A[1],158,s>0?-0.66:PI-0.66,s>0?0.66:PI+0.66);ctx.closePath();paint(C.sheet,C.ink);}
+    for(const s of [0,PI]){const v=s+g.th;ctx.save();ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.arc(A[0],A[1],158,s-0.66,v);ctx.closePath();ctx.fillStyle=STEAM();ctx.globalAlpha=.5;ctx.fill();ctx.restore();bar(A[0],A[1],A[0]+158*Math.cos(v),A[1]+158*Math.sin(v),12,C['steel-fill']);}
+    bar(A[0],A[1],g.E[0],g.E[1],12,C.part);flywheel(O[0],O[1],80,g.phi);bar(g.E[0],g.E[1],g.pin[0],g.pin[1],10,C.part);bar(O[0],O[1],g.pin[0],g.pin[1],12,C['brass-fill']);pivot(A[0],A[1],7);pivot(g.E[0],g.E[1],4);pivot(g.pin[0],g.pin[1],4);
+    label("ROOT'S DOUBLE-QUADRANT ENGINE · two vanes on one rocking shaft",400,490,'center');},
+  reads(){return[['Vanes',`${(this.g.th*180/PI).toFixed(0)}°`],['Pistons','two, on one rocking shaft']];}});
+
+/* 421 · trunk engine: a tube (the trunk) fixed to the piston passes out through the cylinder cover, and the connecting rod is jointed to
+   the piston deep inside it, so a long rod fits in a short engine */
+{const m=SIMS_NEW[421];m.O=[620,270];m.L=300;m.Lt=180;
+ m.draw=function(){const g=this.g,O=this.O,y=O[1],cx0=140,cw=300,x=g.x;flywheel(O[0],O[1],100,g.phi+PI);
+  ctx.beginPath();ctx.rect(cx0,y-70,cw,140);ctx.rect(cx0+12,y-58,cw-24,116);paint(C.part2,C.ink);steamBox(cx0+12,y-58,x-15-cx0-12,116,g.out);steamBox(x+15,y-58,cx0+cw-12-x-15,116,!g.out);
+  ctx.beginPath();ctx.rect(x-15,y-56,30,112);paint(C['steel-fill'],C.ink);ctx.beginPath();ctx.rect(x+15,y-22,this.Lt,44);paint(C.part,C.ink);ctx.beginPath();ctx.rect(x+15,y-14,this.Lt,28);paint(C.sheet,C.ink,.6);
+  bar(x,y,g.pin[0],g.pin[1],12,C.part2);pivot(x,y,4);pivot(g.pin[0],g.pin[1],4);bar(O[0],O[1],g.pin[0],g.pin[1],14,C['brass-fill']);pivot(O[0],O[1],6);
+  label('CYLINDER',cx0+60,y-84,'center');label('TRUNK (fast to the piston)',x+15+this.Lt/2,y+46,'center');label('TRUNK ENGINE · the rod is jointed to the piston inside the trunk',400,490,'center');};}
+
+/* rotary engines 426–428 (and 455, 456 later): vanes slide in the rotor and bear on the case. Shared geometry used by the drawing and
+   the printable model. With fixed abutments (426) the vanes are drawn in as they pass them. */
+const ROT={vaneL(o,a){const O=[400,265],R=150,e=o.e??40,rr=o.rr||100,Rc=[O[0]+e,O[1]],ux=Math.cos(a),uy=Math.sin(a),dx=Rc[0]-O[0],dy=Rc[1]-O[1],b=dx*ux+dy*uy;let L=-b+Math.sqrt(b*b-(dx*dx+dy*dy-R*R));
+  if(o.abut){for(const s of [-PI/2,PI/2]){const d=Math.abs(Math.atan2(Math.sin(a-s),Math.cos(a-s)));if(d<0.45)L-=32*Math.cos(d/0.45*PI/2)**2;}}return L;}};
+for(const n of [426,427,428]){const m=SIMS_NEW[n];if(!m)continue;const o=n===426?{e:0,rr:90,N:2,abut:true}:n===427?{e:30,rr:110,N:2}:{e:30,rr:110,N:2,rollers:true};m.ro=o;
+  m.vaneL=a=>ROT.vaneL(o,a);
+  const lab=n===426?'TWO SLIDING PISTONS ARE DRAWN IN TO PASS THE FIXED ABUTMENTS':n===427?'OFFSET SHAFT · the pistons slide out and in as the rotor turns':'RUBBER LINING PRESSED ON BY ROLLERS';
+  m.draw=function(){const g=this.g,O=[400,265],R=150,e=o.e,rr=o.rr,Rc=[O[0]+e,O[1]];circ(O[0],O[1],R+18);paint(C.part2,C.ink);circ(O[0],O[1],R);paint(C.sheet,C.ink);
+    if(o.rollers){ctx.save();ctx.strokeStyle=C.muted;ctx.lineWidth=6;ctx.beginPath();ctx.arc(O[0],O[1],R-3,0,TAU);ctx.stroke();ctx.restore();for(let k=0;k<6;k++){const a=k*PI/3;circ(O[0]+(R+9)*Math.cos(a),O[1]+(R+9)*Math.sin(a),8);paint(C.hi,C.ink);}}
+    if(o.abut){for(const s of [-1,1]){ctx.beginPath();ctx.rect(O[0]-12,O[1]+s*R-(s>0?32:0),24,32);paint(C.part2,C.ink);}}
+    const a0=g.phi;ctx.save();ctx.fillStyle=STEAM();ctx.globalAlpha=.45;ctx.beginPath();ctx.moveTo(Rc[0]+rr*Math.cos(a0),Rc[1]+rr*Math.sin(a0));const Lp=ROT.vaneL(o,a0);ctx.lineTo(Rc[0]+Lp*Math.cos(a0),Rc[1]+Lp*Math.sin(a0));for(let i=1;i<=12;i++){const t=a0-0.9*i/12;ctx.lineTo(O[0]+R*Math.cos(t),O[1]+R*Math.sin(t));}ctx.lineTo(Rc[0]+rr*Math.cos(a0-0.9),Rc[1]+rr*Math.sin(a0-0.9));ctx.closePath();ctx.fill();ctx.restore();
+    circ(Rc[0],Rc[1],rr);paint(C['steel-fill'],C.ink);
+    for(let k=0;k<o.N;k++){const a=g.phi+k*TAU/o.N,L=ROT.vaneL(o,a),Lv=R+e-rr+25,u=[Math.cos(a),Math.sin(a)];ctx.save();ctx.translate(Rc[0],Rc[1]);ctx.rotate(a);ctx.beginPath();ctx.rect(L-Lv,-7,Lv,14);paint(C['brass-fill'],C.ink);ctx.restore();}
+    pivot(Rc[0],Rc[1],6);label('STEAM IN',O[0]-R-40,O[1]-40,'right');label('EXHAUST',O[0]-R-40,O[1]+50,'right');label(lab,400,490,'center');};}
+
+/* ================= audit pass 441–475 ================= */
+/* 445, 446 · water lifted by a cone valve: water rushing down the drive pipe carries a cone up into its seat and stops dead; the shock
+   opens the check valve and drives a little water up the rising main; then the cone drops by its weight and the flow starts again.
+   446 shows the cone and its seat close up. */
+function coneLift(num,o){return reg({num,outLabel:'Rising main, mm',concept:true,
+  update(phi){const u=mod(phi*1.2,TAU)/TAU,st=u<0.6?'flow':u<0.72?'shut':'deliver',c=u<0.5?0:u<0.6?smooth((u-0.5)/0.1):u<0.9?1:1-smooth((u-0.9)/0.1);this.g={phi,u,st,c,lift:Math.floor(phi*1.2/TAU)%10*8+(st==='deliver'?8*(u-0.72)/0.28:0)};},
+  output(){return this.g.lift;},
+  draw(){const g=this.g;if(!o.close){water(20,120,150,120);ctx.save();ctx.strokeStyle=C.ink;ctx.lineWidth=2;ctx.strokeRect(20,90,150,150);ctx.restore();
+      ctx.beginPath();ctx.moveTo(150,240);ctx.lineTo(370,380);ctx.lineTo(370,400);ctx.lineTo(150,260);ctx.closePath();paint(C['steel-fill'],C.ink);if(g.st==='flow')dashFlow([[160,250],[360,390]],g.phi*3,3);
+      const C0=[420,400];ctx.beginPath();ctx.rect(C0[0]-50,C0[1]-40,100,90);paint(C['steel-fill'],C.ink,.9);ctx.beginPath();ctx.rect(C0[0]-16,C0[1]+50,32,30);paint(C.part2,C.ink);
+      const cy=C0[1]+64-28*g.c;poly([[C0[0]-14,cy+14],[C0[0]+14,cy+14],[C0[0],cy-16]]);ctx.closePath();paint(C.hi,C.ink);if(g.st==='flow')dashFlow([[C0[0],C0[1]+40],[C0[0],C0[1]+110]],g.phi*3,3);
+      ctx.beginPath();ctx.rect(C0[0]+60,150,60,200);paint(C.part2,C.ink);ctx.save();ctx.fillStyle=C['steel-fill'];ctx.fillRect(C0[0]+64,230,52,120);ctx.restore();valveFlap(C0[0]+50,C0[1]-10,20,g.st==='deliver');
+      ctx.beginPath();ctx.rect(C0[0]+120,160,220,14);paint(C['steel-fill'],C.ink);if(g.st==='deliver'||true)dashFlow([[C0[0]+130,167],[C0[0]+330,167]],g.phi*2,3);label('AIR VESSEL',C0[0]+90,140,'center');label('CONE VALVE',C0[0]-60,C0[1]+80,'right');label('DRIVE PIPE',260,290);label('RISING MAIN',C0[0]+230,150,'center');}
+    else{const C0=[400,260];ctx.beginPath();ctx.rect(C0[0]-160,C0[1]-160,320,220);ctx.rect(C0[0]-140,C0[1]-140,280,200);paint(C.part2,C.ink);water(C0[0]-140,C0[1]-140,280,200);
+      ctx.beginPath();ctx.moveTo(C0[0]-160,C0[1]+60);ctx.lineTo(C0[0]-50,C0[1]+60);ctx.lineTo(C0[0]-40,C0[1]+80);ctx.lineTo(C0[0]-160,C0[1]+80);ctx.closePath();ctx.moveTo(C0[0]+160,C0[1]+60);ctx.lineTo(C0[0]+50,C0[1]+60);ctx.lineTo(C0[0]+40,C0[1]+80);ctx.lineTo(C0[0]+160,C0[1]+80);ctx.closePath();paint(C.part,C.ink);label('SEAT',C0[0]+100,C0[1]+100,'center');
+      const cy=C0[1]+150-90*g.c;poly([[C0[0]-46,cy],[C0[0]+46,cy],[C0[0],cy-90]]);ctx.closePath();paint(C.hi,C.ink);bar(C0[0],cy,C0[0],cy+60,8,C.part);label('CONE',C0[0]+60,cy-30);
+      if(g.st==='flow'){dashFlow([[C0[0]-60,C0[1]-100],[C0[0]-60,C0[1]+200]],g.phi*3,3);dashFlow([[C0[0]+60,C0[1]-100],[C0[0]+60,C0[1]+200]],g.phi*3,3);}}
+    label({flow:'WATER RUSHES DOWN AND OUT PAST THE CONE',shut:'THE FLOW LIFTS THE CONE INTO ITS SEAT · the water stops dead',deliver:'THE SHOCK DRIVES WATER UP THROUGH THE CHECK VALVE'}[g.st],400,40,'center');label(o.label,400,505,'center');},
+  reads(){const g=this.g;return[['Phase',{flow:'flow',shut:'cone seats',deliver:'delivery'}[g.st]],['Cone',g.c>0.5?'seated':'open']];}});}
+coneLift(445,{label:'A CONE VALVE INTERRUPTS THE FLOW AND THE SHOCK LIFTS WATER'});
+coneLift(446,{close:true,label:'THE CONE AND ITS SEAT, CLOSE UP'});
+
+/* 455, 456 · rotary pumps with sliding vanes */
+for(const n of [455,456]){const m=SIMS_NEW[n];if(!m)continue;const o=n===455?{e:30,rr:110,N:4}:{e:0,rr:100,N:4,abut1:true};m.ro=o;m.concept=n===456;
+  const vL=a=>{const O=[400,265],R=150,e=o.e,rr=o.rr,Rc=[O[0]+e,O[1]],ux=Math.cos(a),uy=Math.sin(a),dx=Rc[0]-O[0],dy=Rc[1]-O[1],b=dx*ux+dy*uy;let L=-b+Math.sqrt(b*b-(dx*dx+dy*dy-R*R));
+    if(o.abut1){const d=Math.abs(Math.atan2(Math.sin(a+PI/2),Math.cos(a+PI/2)));if(d<0.7)L-=46*Math.cos(d/0.7*PI/2)**2;}return L;};m.vaneL=vL;
+  m.draw=function(){const g=this.g,O=[400,265],R=150,e=o.e,rr=o.rr,Rc=[O[0]+e,O[1]],Lv=R+e-rr+25;circ(O[0],O[1],R+18);paint(C.part2,C.ink);circ(O[0],O[1],R);paint(C.sheet,C.ink);
+    if(o.abut1){ctx.beginPath();ctx.moveTo(O[0]-40,O[1]-R);ctx.quadraticCurveTo(O[0],O[1]-R+90,O[0]+40,O[1]-R);ctx.closePath();paint(C.part2,C.ink);}
+    ctx.save();ctx.fillStyle=C['steel-fill'];ctx.globalAlpha=.5;ctx.beginPath();for(let i=0;i<=40;i++){const t=0.2+i/40*2.4;ctx.lineTo(O[0]+R*Math.cos(t),O[1]+R*Math.sin(t));}for(let i=40;i>=0;i--){const t=0.2+i/40*2.4;ctx.lineTo(Rc[0]+rr*Math.cos(t),Rc[1]+rr*Math.sin(t));}ctx.closePath();ctx.fill();ctx.restore();
+    circ(Rc[0],Rc[1],rr);paint(C['steel-fill'],C.ink);
+    if(o.abut1){ctx.save();ctx.strokeStyle=C.ink;ctx.setLineDash([4,3]);ctx.beginPath();for(let i=0;i<=120;i++){const a=i/120*TAU,r=vL(a)-Lv;ctx.lineTo(Rc[0]+r*Math.cos(a),Rc[1]+r*Math.sin(a));}ctx.closePath();ctx.stroke();ctx.restore();label('FIXED HEART CAM',Rc[0]+10,Rc[1]+24);}
+    for(let k=0;k<o.N;k++){const a=g.phi+k*TAU/o.N,L=vL(a);ctx.save();ctx.translate(Rc[0],Rc[1]);ctx.rotate(a);ctx.beginPath();ctx.rect(L-Lv,-7,Lv,14);paint(C['brass-fill'],C.ink);ctx.restore();}
+    pivot(Rc[0],Rc[1],6);label('INLET',O[0]-R-30,O[1]+40,'right');label('OUTLET',O[0]+R+30,O[1]+40);label(n===455?'OLD ROTARY PUMP · sliding vanes in an off-centre drum':'SLIDING PISTONS FOLLOW A FIXED HEART CAM, DRAWN IN TO PASS THE ABUTMENT',400,490,'center');};}
+
+/* 463 · self-acting weir: the leaf turns on an axle a third of the way up; while the water is low its pressure acts below the axle and
+   holds the leaf shut, but when the water rises far enough the leaf swings over, the flood scours away the silt, and as the level falls
+   the counterweight closes it again */
+{const m=SIMS_NEW[463];m.update=function(phi){const u=mod(phi,TAU)/TAU;const lvl=u<0.7?u/0.7:1-(u-0.7)/0.3,open=u<0.7?0:u<0.75?smooth((u-0.7)/0.05):u<0.92?1:1-smooth((u-0.92)/0.08);this.g={phi,lvl,open,o:open>0.5};};
+ m.draw=function(){const g=this.g,y0=420-g.lvl*200,P=[410,353];water(60,y0,340,420-y0);ctx.beginPath();ctx.rect(60,420,700,20);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(396,190,10,230);paint(C.part2,C.ink);
+  ctx.save();ctx.translate(P[0],P[1]);ctx.rotate(-1.2*g.open);ctx.beginPath();ctx.rect(4,-133,12,200);paint(C['steel-fill'],C.ink);bar(10,0,90,40,6,C.part);ctx.beginPath();ctx.rect(80,30,24,24);paint(C.part,C.ink);ctx.restore();pivot(P[0],P[1],6);
+  water(420,400,380,20);if(g.o){dashFlow([[380,410],[640,410]],g.phi*3,6);dashFlow([[380,330],[640,380]],g.phi*3,6);}
+  label(g.o?'LEAF SWUNG OVER · the flood scours away the silt':'WATER RISING BEHIND THE LEAF',560,140);label('AXLE A THIRD OF THE WAY UP',P[0]+20,P[1]-150);label('COUNTERWEIGHT',P[0]+100,P[1]+80);};
+ m.reads=function(){return[['Level',`${(this.g.lvl*100).toFixed(0)} %`],['Leaf',this.g.o?'open':'shut']];};}
+
+/* 467 · hydraulic jack: the hand lever works the small plunger through a short link; each down stroke forces liquid under the ram */
+{const m=SIMS_NEW[467];m.draw=function(){const g=this.g,X=470,F=[240,240];ctx.beginPath();ctx.rect(X-80,200,160,260);ctx.rect(X-66,200,132,260);paint(C.part2,C.ink);ctx.save();ctx.fillStyle=C['steel-fill'];ctx.fillRect(X-66,320-this.h*0.6,132,140+this.h*0.6);ctx.restore();ctx.beginPath();ctx.rect(X-60,140-this.h*0.6,120,190);paint(C['brass-fill'],C.ink);weight(X,100-this.h*0.6,160,40,'LOAD');
+  const th=-PI/2-0.6+g.a,E=[F[0]+180*Math.cos(th),F[1]+180*Math.sin(th)],Lp=[F[0]-45*Math.cos(th),F[1]-45*Math.sin(th)],Pt=[F[0]+35,Lp[1]+16];
+  ctx.beginPath();ctx.rect(F[0]+20,300,30,160);paint(C.part2,C.ink);bar(Pt[0],Pt[1],Pt[0],Pt[1]+80,12,C.part);bar(Lp[0],Lp[1],Pt[0],Pt[1],6,C.part2);bar(Lp[0],Lp[1],E[0],E[1],12,C['steel-fill']);pivot(F[0],F[1],6);pivot(Lp[0],Lp[1],4);pivot(Pt[0],Pt[1],4);ctx.beginPath();ctx.rect(F[0]-6,F[1],12,60);paint(C.part2,C.ink);
+  dashFlow([[F[0]+35,460],[X-66,460]],g.phi*(g.down?2:0),4);label('SMALL PLUNGER PUMPS OIL OR WATER UNDER THE BIG RAM',400,505,'center');label('HANDLE',E[0]-20,E[1]-10,'right');};}
+
+/* 470 · steam hammer: piston, rod and hammer head are one piece, so they move together through the full stroke */
+{const m=SIMS_NEW[470];m.draw=function(){const g=this.g,X=400,yh=340-g.h*120,yp=yh-180;ctx.beginPath();ctx.rect(X-190,30,40,450);ctx.rect(X+150,30,40,450);paint(C.part2,C.ink);
+  ctx.beginPath();ctx.rect(X-62,24,124,196);ctx.rect(X-50,30,100,180);paint(C.part2,C.ink);steamBox(X-50,yp+20,100,210-yp-20,g.u<0.65);ctx.beginPath();ctx.rect(X-50,yp,100,20);paint(C['steel-fill'],C.ink);ctx.beginPath();ctx.rect(X-10,210,20,10);paint(C.part2,C.ink);
+  bar(X,yp+10,X,yh,14,C.part);ctx.beginPath();ctx.rect(X-70,yh,140,70);paint(C['steel-fill'],C.ink);ctx.beginPath();ctx.rect(X-60,412,120,24);paint(C['brass-fill'],C.ink);ctx.beginPath();ctx.rect(X-90,436,180,50);paint(C.part2,C.ink);ground(X,486,300);
+  label('CYLINDER',X+80,60);label('HAMMER HEAD',X+80,yh+36);label(g.u<0.65?'STEAM UNDER THE PISTON LIFTS THE HAMMER':g.u<0.73?'STEAM RELEASED · the hammer falls':'BLOW',400,500,'center');};}
+
+/* 460 · the scoop is rocked through a crank and a rod of fixed length (crank and rocker) */
+{const m=SIMS_NEW[460],F=[420,200],O=[650,90],A0=[F[0]+60*Math.cos(-0.6),F[1]+60*Math.sin(-0.6)],Lr=Math.hypot(O[0]-A0[0],O[1]-A0[1]);
+ m.update=function(phi){const pin=[O[0]+40*Math.cos(phi),O[1]+40*Math.sin(phi)],A=cc(F,60,pin,Lr,-1),a=Math.atan2(A[1]-F[1],A[0]-F[0])+0.6;this.g={phi,a,lift:Math.cos(phi)<0,pin,A};};
+ m.draw=function(){const g=this.g;water(0,380,330,140);water(520,250,280,270);ctx.beginPath();ctx.rect(330,260,190,260);paint(C.part2,C.ink);
+  ctx.save();ctx.translate(F[0],F[1]);ctx.rotate(g.a);ctx.beginPath();ctx.moveTo(-220,170);ctx.lineTo(0,0);ctx.lineTo(30,-20);ctx.lineTo(10,20);ctx.lineTo(-200,200);ctx.closePath();paint(C['steel-fill'],C.ink);ctx.restore();pivot(F[0],F[1],7);
+  flywheel(O[0],O[1],60,g.phi);bar(g.pin[0],g.pin[1],g.A[0],g.A[1],8,C.part);pivot(g.pin[0],g.pin[1],4);pivot(g.A[0],g.A[1],4);label('ENGINE-DRIVEN SCOOP LIFTS WATER OVER THE BANK',400,505,'center');};}
+
+/* ================= audit pass 476–507 ================= */
+/* 507 · slow motion by an epicyclic train: a fixed wheel of 41 teeth and an output wheel of 40 on the same axis; the arm carries a
+   compound planet of 39 and 40 teeth meshing them. Each turn of the arm moves the output by 1 − (41×40)/(39×40) = −2/39 of a turn.
+   (Same module throughout, so 41+39 = 40+40 and both pairs share one centre distance.) */
+const EPI={mesh(th,a1,Z1,Z2){return th+PI+(Z1/Z2)*(th-a1)-PI/Z2;}};
+reg({num:507,outLabel:'Output wheel, turns',ZF:41,Za:39,Zb:40,ZW:40,d:150,EPI,
+  update(phi){const arm=phi,ZF=this.ZF,Za=this.Za,Zb=this.Zb,ZW=this.ZW,w=arm*(1-ZF*Zb/(Za*ZW));this.g={phi,arm,slow:w,pa:EPI.mesh(arm,0,ZF,Za),pb:EPI.mesh(arm,w,ZW,Zb)};},output(){return this.g.slow/TAU;},
+  draw(){const g=this.g,O=[400,265],d=this.d,m=2*d/(this.ZF+this.Za),P=[O[0]+d*Math.cos(g.arm),O[1]+d*Math.sin(g.arm)];
+    ctx.save();ctx.globalAlpha=0.55;drawGear(O[0],O[1],m*this.ZF/2,this.ZF,0,C.part2,{bore:8});drawGear(P[0],P[1],m*this.Za/2,this.Za,g.pa,C.hi,{bore:5});ctx.restore();
+    drawGear(O[0],O[1],m*this.ZW/2,this.ZW,g.slow,C['steel-fill'],{bore:8});drawGear(P[0],P[1],m*this.Zb/2,this.Zb,g.pb,C.part,{bore:5});
+    bar(O[0],O[1],P[0],P[1],14,C['brass-fill']);pivot(P[0],P[1],4);pivot(O[0],O[1],6);const t=g.slow-PI/2;bar(O[0],O[1],O[0]+60*Math.cos(t),O[1]+60*Math.sin(t),5,C.steel);
+    label('FIXED WHEEL 41 (behind) · OUTPUT WHEEL 40 (front) · planet 39 + 40 on the arm',400,470,'center');label('one turn of the arm moves the output back by 2/39 of a turn',400,490,'center');},
+  reads(){const g=this.g;return[['Arm turns',`${(g.arm/TAU).toFixed(2)}`],['Output turns',`${(g.slow/TAU).toFixed(3)}`],['Ratio','−2/39 per arm turn']];}});
+
+/* 493 · lewis: two tapered side pieces and a straight middle piece lock in a dovetail hole; drawn rigid, lowered into the hole in turn */
+{const m=SIMS_NEW[493];m.draw=function(){const g=this.g,X=400,y=300-g.lift,up=(1-g.ins)*100;poly([[X-160,y],[X-20,y],[X-36,y+90],[X+36,y+90],[X+20,y],[X+160,y],[X+160,y+180],[X-160,y+180]]);ctx.closePath();paint(C.part2,C.ink);
+  for(const s of [-1,1]){poly([[X+s*8,y-up],[X+s*20,y-up],[X+s*36,y+90-up],[X+s*8,y+90-up]]);ctx.closePath();paint(C['steel-fill'],C.ink);}
+  const um=(1-smooth(Math.max(0,(g.ins-0.5)*2)))*130;ctx.beginPath();ctx.rect(X-8,y-60-um,16,150);paint(C['brass-fill'],C.ink);bar(X-30,y-70-um*0,X+30,y-70,10,C.part);rope([[X,0],[X,y-70]]);
+  label('SIDE PIECES GO IN FIRST, THEN THE MIDDLE PIECE LOCKS THEM AGAINST THE DOVETAIL',400,500,'center');};}
+
 const ALL=Object.assign({119:M119,120:M120,121:M121,122:M122,123:M123,124:M124,127:M127},SIMS_NEW);
 for(const k in ALL){const m=ALL[k];m.params=m.params||[];m.P={};m.params.forEach(p=>m.P[p.id]=p.value);if(!m.reset)m.reset=function(){};}
-window.MB={SIMS:ALL,C,setCtx(c){ctx=c;},setDir(d){DIR=d||1;},W,H};
+window.MB={SIMS:ALL,C,setCtx(c){ctx=c;},setDir(d){DIR=d||1;},W,H,ropeThru,tanLine,cam3,circ3,pitchCurve,toothedCurve,ncPhase,lockDiskPts,sawR,stad};
 })();

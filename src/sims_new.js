@@ -531,7 +531,7 @@ reg({num:344,outLabel:'Cylinder angle, degrees',O:[560,260],T:[250,260],r:65,
   output(){return this.g.a*180/PI;},
   draw(){const g=this.g,O=this.O,T=this.T;circ(O[0],O[1],120);paint(C.part,C.ink);for(let k=0;k<5;k++){const a=g.phi+k*TAU/5;bar(O[0],O[1],O[0]+110*Math.cos(a),O[1]+110*Math.sin(a),8,C.part2);}
     bar(O[0],O[1],g.pin[0],g.pin[1],16,C['brass-fill']);
-    ctx.save();ctx.translate(T[0],T[1]);ctx.rotate(g.a);ctx.beginPath();ctx.rect(-170,-44,200,88);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(g.d-260-20,-34,30,68);paint(C['steel-fill'],C.ink);bar(g.d-250,0,g.d,0,10,C.part);ctx.restore();
+    ctx.save();ctx.translate(T[0],T[1]);ctx.rotate(g.a);ctx.beginPath();ctx.rect(-90,-44,250,88);ctx.rect(-80,-34,230,68);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(g.d-250-15,-34,30,68);paint(C['steel-fill'],C.ink);bar(g.d-235,0,g.d,0,10,C.part);ctx.restore();
     pivot(g.pin[0],g.pin[1],5);pivot(O[0],O[1],6);circ(T[0],T[1],14);paint(C.hi,C.ink);pivot(T[0],T[1],5);ground(T[0],T[1]+60,60);ctx.beginPath();ctx.rect(T[0]-8,T[1]+14,16,46);paint(C.part2,C.ink);
     label('CYLINDER ROCKS ON TRUNNIONS',T[0],T[1]-90,'center');},
   reads(){const g=this.g;return[['Cylinder angle',`${(g.a*180/PI).toFixed(1)}°`],['Piston stroke',`${2*this.r} mm`],['Valve','set by the rocking itself']];}});

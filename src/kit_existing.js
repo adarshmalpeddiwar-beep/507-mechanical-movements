@@ -14,12 +14,23 @@ function arcArrow(cx,cy,r,a0,a1,col){ctx.save();ctx.strokeStyle=col;ctx.fillStyl
 function linArrow(x,y,len,col){if(Math.abs(len)<3)return;ctx.save();ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+len,y);ctx.stroke();const s=Math.sign(len);ctx.beginPath();ctx.moveTo(x+len+8*s,y);ctx.lineTo(x+len,y-4);ctx.lineTo(x+len,y+4);ctx.closePath();ctx.fill();ctx.restore();}
 
 const PROF=[[-0.5,0],[-0.27,0],[-0.12,1],[0.12,1],[0.27,0]];
+/* involute tooth flank table, cached per tooth count: [[r/R, half-angle·N/τ]...] tip to root */
+const _flank={};
+function flankOf(N,internal){const k=N+(internal?'i':'');if(_flank[k])return _flank[k];const R=1,m=2/N,pa=20*PI/180,rb=Math.cos(pa),inv=a=>Math.tan(a)-a,ip=inv(pa);
+  const ra=internal?R+1.25*m:R+m,rr=internal?R-m:R-1.25*m,half=PI/(2*N)*(internal?1.04:0.96);const r0=Math.max(rb,rr),o=[];
+  for(let i=0;i<=5;i++){const r=r0+(ra-r0)*i/5;o.push([r,half+ip-inv(Math.acos(Math.min(1,rb/r)))]);}
+  if(rr<r0-1e-6)o.unshift([rr,o[0][1]]);return _flank[k]={o,rr,ra};}
 function gearPts(cx,cy,r,N,ang,internal,a0,a1){
-  const m=2*r/N,tau=TAU/N,rt=internal?r-m:r+m,rr=internal?r+1.25*m:r-1.25*m,pts=[];
+  const tau=TAU/N,F=flankOf(N,internal),pts=[];
   let i0=0,i1=N-1;
   if(a0!=null){i0=Math.ceil((a0-ang)/tau);i1=Math.floor((a1-ang)/tau);}
-  for(let i=i0;i<=i1;i++){const c=ang+i*tau;for(const [f,t] of PROF){const a=c+f*tau,rad=t?rt:rr;pts.push([cx+rad*Math.cos(a),cy+rad*Math.sin(a)]);}}
-  if(a0!=null){const a=ang+(i1+0.5)*tau;pts.push([cx+rr*Math.cos(a),cy+rr*Math.sin(a)]);}
+  const P=(rad,a)=>pts.push([cx+rad*r*Math.cos(a),cy+rad*r*Math.sin(a)]);
+  if(!internal){for(let i=i0;i<=i1;i++){const c=ang+i*tau;for(let j=0;j<F.o.length;j++)P(F.o[j][0],c-F.o[j][1]);for(let j=F.o.length-1;j>=0;j--)P(F.o[j][0],c+F.o[j][1]);}}
+  else{/* internal: material tooth points inward; the space between teeth is an involute "tooth" outward */
+    for(let i=i0;i<=i1;i++){const c=ang+i*tau,s=c+tau/2;/* tooth centre c (inner tip at r-m) */
+      P(F.rr,c);/* inner tip centre */
+      for(let j=0;j<F.o.length;j++)P(F.o[j][0],s-F.o[j][1]);for(let j=F.o.length-1;j>=0;j--)P(F.o[j][0],s+F.o[j][1]);}}
+  if(a0!=null){const a=ang+(i1+0.5)*tau;pts.push([cx+F.rr*r*Math.cos(a),cy+F.rr*r*Math.sin(a)]);}
   return pts;
 }
 function drawGear(cx,cy,r,N,ang,fill,o={}){

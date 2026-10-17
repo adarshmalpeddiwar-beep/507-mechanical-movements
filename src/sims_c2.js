@@ -16,11 +16,6 @@ function stepper(num,o){return reg({num,outLabel:'Driven wheel, turns',concept:!
     if(o.pawl){const Q=[Wc[0]+30,Wc[1]-(o.rw||110)-60],off=mod(g.s,1),lift=off>0&&off<1?Math.sin(off*PI)*14:0;bar(Q[0],Q[1],Wc[0]+12,Wc[1]-(o.rw||110)*0.7-lift,8,C.part);pivot(Q[0],Q[1],5);springZ(Q[0]+60,Q[1]-20,Q[0]+30,Q[1]+18,8,5);}
     label(o.label,400,480,'center');if(o.l2)label(o.l2,400,500,'center');},
   reads(){const g=this.g;return[['Steps taken',`${Math.floor(g.s+1e-6)}`],['Each step',`1/${o.N} turn`],['Driver turns per step','1'],['Between steps',o.rim?'locked by the rim':'held at rest']];}});}
-stepper(54,{N:6,style:'star',label:'PIN ON THE DISK KICKS THE STAR ROUND ONE POINT',concept:true});
-stepper(63,{N:10,style:'star',pawl:true,label:'DROP PAWL AND SPRING HOLD THE STAR BETWEEN STEPS',Wc:[510,300]});
-stepper(65,{N:8,style:'studs',label:'ONE TAPPET, ONE STUD PER TURN'});
-stepper(70,{N:8,style:'studs',rim:true,label:'RIM HOLDS THE STUDS · THE OPENING LETS ONE THROUGH'});
-stepper(71,{N:8,style:'studs',rim:true,tooth:true,label:'TAPPET STRIKES A STUD, RIM LOCKS THE REST'});
 stepper(364,{N:12,style:'slots',rd:60,D:[330,260],Wc:[500,260],rw:120,label:'ROLLERS ON THE SMALL WHEEL STEP THE LARGE ONE',concept:true});
 stepper(398,{N:4,style:'slots',u0:0.2,u1:0.8,label:'CAM STARTS AND STOPS THE DRIVEN WHEEL',concept:true});
 oneTooth(69,true);SIMS_NEW[69].concept=true;
@@ -61,12 +56,14 @@ function wormRelease(num,o){return reg({num,outLabel:'Main wheel, turns',concept
     if(o.kind==='weight'){bar(S[0]+80,S[1]+140,S[0]+80,S[1]+200,4,C.part);weight(S[0]+80,S[1]+200,50,40,'');}else if(o.kind==='tumbler'){circ(S[0]+40,S[1]+190,20);paint(C['brass-fill'],C.ink);}else springZ(S[0]-40,S[1]+30,S[0]-40,S[1]+120);
     label('WORM SLOWLY TURNS THE CAM',S[0],S[1]-80,'center');label(g.rel?'RELEASED · main wheel makes one turn':'LOCKED',Wc[0],Wc[1]+150,'center');},
   reads(){return[['State',this.g.rel?'released':'locked'],['Return by',o.kind||'spring']];}});}
-wormRelease(64,{});wormRelease(66,{kind:'weight'});wormRelease(67,{kind:'tumbler'});
+
 
 /* ---- lever and pawl drives ---- */
-function leverPawl(num,o){return reg({num,outLabel:'Ratchet wheel, turns',concept:!!o.concept,params:o.params||[],
+function leverPawl(num,o){return reg({num,outLabel:'Ratchet wheel, turns',concept:!!o.concept,params:o.params||[],o,
   reset(){this.w=0;this.last=null;},
-  update(phi){const a=(o.amp||0.35)*Math.sin(phi);if(this.last===null)this.last=a;const d=a-this.last;this.last=a;const dir=this.P.dir===undefined?1:this.P.dir;
+  lever(phi){if(!o.crank)return(o.amp||0.35)*Math.sin(phi);const O=o.O||[380,300],L=112+90,Cc=[O[0]+260,O[1]-60],pin=[Cc[0]+40*Math.cos(phi),Cc[1]+40*Math.sin(phi)];if(this.Lr===undefined){const E0=[O[0],O[1]-L];this.Lr=Math.hypot(Cc[0]-E0[0],Cc[1]-E0[1]);}
+    const E=cc(O,L,pin,this.Lr,-1);return Math.atan2(E[1]-O[1],E[0]-O[0])+PI/2;},
+  update(phi){const a=this.lever(phi);if(this.last===null)this.last=a;const d=a-this.last;this.last=a;const dir=this.P.dir===undefined?1:this.P.dir;
     this.w+=o.double?Math.abs(d)*dir:Math.max(0,d*dir)*dir;this.g={phi,a,d};},output(){return this.w/TAU;},
   draw(){const g=this.g,O=o.O||[380,300],N=o.N||20,rr=90,rt=112,dir=this.P.dir===undefined?1:this.P.dir;
     if(o.rack){/* slotted rack variant */const y=300,x0=150+this.w*rr;ctx.beginPath();ctx.rect(x0-120,y,520,30);paint(C['steel-fill'],C.ink);for(let i=0;i<24;i++){ctx.beginPath();ctx.rect(x0-110+i*22,y+8,10,14);ctx.fillStyle=C.sheet;ctx.fill();}
@@ -82,7 +79,7 @@ function leverPawl(num,o){return reg({num,outLabel:'Ratchet wheel, turns',concep
   reads(){const g=this.g;return[['Lever',`${(g.a*180/PI).toFixed(0)}°`],['Drives on',o.double?'both strokes':'one stroke'],['Wheel',`${(this.w/TAU).toFixed(2)} turns`]];}});}
 leverPawl(73,{label:'SPRING-DRIVEN PAWL ADVANCES THE WHEEL EACH TURN',crank:true,concept:true});
 leverPawl(75,{label:'ROD SWINGS THE BAR, PAWL TURNS THE WHEEL',crank:true});
-alias(78,77,{concept:true});
+
 leverPawl(79,{double:true,label:'PAWLS ON TWO ARMS · WHEEL MOVES ON BOTH STROKES',crank:true});
 leverPawl(80,{rack:true,double:true});
 leverPawl(83,{double:true,label:'TWO RATCHET ARCS WITH OPPOSITE TEETH',concept:true});
@@ -101,7 +98,7 @@ function twinRatchet(num,o){return reg({num,outLabel:'Output shaft, turns',conce
     stripeShaft(A[0],B[0],260,8,this.w,C.part2);label(o.label,400,30,'center');
     function P0y(P){return P[1]+88;}},
   reads(){return[['Input','swings both ways'],['Output','turns one way, both strokes'],['Turns',`${(this.w/TAU).toFixed(2)}`]];}});}
-twinRatchet(49,{label:'TWO OPPOSED RATCHETS MAKE THE SWING CONTINUOUS'});twinRatchet(82,{kind:'treadle',label:'TWO TREADLES, ONE CHAIN, TWO RATCHETS',concept:true});twinRatchet(390,{label:'LEVER AND BANDS TURN THE FLYWHEEL ONE WAY'});
+twinRatchet(82,{kind:'treadle',label:'TWO TREADLES, ONE CHAIN, TWO RATCHETS',concept:true});twinRatchet(390,{label:'LEVER AND BANDS TURN THE FLYWHEEL ONE WAY'});
 twinRatchet(360,{label:'ROCKING BEAM, DRUMS AND RATCHETS TURN THE SHAFT',concept:true});
 
 reg({num:116,outLabel:'Shaft turns',concept:true,
