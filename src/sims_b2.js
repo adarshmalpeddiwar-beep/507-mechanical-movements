@@ -432,7 +432,7 @@ reg({num:345,outLabel:'Cylinder angle, degrees',T:[400,90],O:[400,390],r:60,
   update(phi){const pin=[this.O[0]+this.r*Math.cos(phi),this.O[1]+this.r*Math.sin(phi)];const a=Math.atan2(pin[0]-this.T[0],pin[1]-this.T[1]);this.g={phi,pin,a,d:Math.hypot(pin[0]-this.T[0],pin[1]-this.T[1])};},
   output(){return this.g.a*180/PI;},
   draw(){const g=this.g,T=this.T,O=this.O;flywheel(O[0],O[1],110,g.phi);bar(O[0],O[1],g.pin[0],g.pin[1],14,C['brass-fill']);
-    ctx.save();ctx.translate(T[0],T[1]);ctx.rotate(-g.a);ctx.beginPath();ctx.rect(-40,-10,80,180);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(-32,g.d-150,64,24);paint(C['steel-fill'],C.ink);bar(0,g.d-140,0,g.d,10,C.part);ctx.restore();
+    ctx.save();ctx.translate(T[0],T[1]);ctx.rotate(-g.a);ctx.beginPath();ctx.rect(-44,-12,88,244);ctx.rect(-34,10,68,222);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(-32,g.d-160,64,24);paint(C['steel-fill'],C.ink);bar(0,g.d-148,0,g.d,10,C.part);ctx.restore();
     pivot(g.pin[0],g.pin[1],5);pivot(O[0],O[1],6);circ(T[0],T[1],12);paint(C.hi,C.ink);pivot(T[0],T[1],4);ground(T[0],T[1]-14,60,true);label('CYLINDER SWINGS FROM THE TOP',T[0]+60,T[1]+20);},
   reads(){const g=this.g;return[['Cylinder swing',`${(g.a*180/PI).toFixed(1)}°`],['Stroke',`${2*this.r} mm`]];}});
 

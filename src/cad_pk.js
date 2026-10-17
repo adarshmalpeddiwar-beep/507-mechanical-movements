@@ -274,9 +274,15 @@ PK.Lib=(()=>{const Sh=PK.Sh,PI=Math.PI,TAU=2*PI;
     const parts=[{id:'c',name:'Crank disk',role:'driver',layer:0,shape:Sh.disk(r+30,[[0,0]],72),pins:[[r,0,1]]}],fixed=[];
     if(yoke){parts.push({id:'y',name:'Slotted yoke with rod',role:'driven',layer:1,shape:{o:[[-16,-r-30],[16,-r-30],[16,-12],[330,-12],[330,12],[16,12],[16,r+30],[-16,r+30]],h:[Sh.slotPts(0,-r-8,0,r+8,(PK.PINR*2+0.6)/PK.S)]}});
       fixed.push({shape:S=>S.rect(240,8,O[0]+Lr*0.5+200,y-22),l1:1},{shape:S=>S.rect(240,8,O[0]+Lr*0.5+200,y+22),l1:1});}
-    else{parts.push({id:'rod',name:'Connecting rod',role:'link',layer:1,shape:Sh.bar(Lr,14)},{id:'s',name:'Slide (crosshead)',role:'driven',layer:1,shape:{o:[[-30,-28],[30,-28],[30,-10],[300,-10],[300,10],[30,10],[30,28],[-30,28]],h:[Sh.hole(0,0)]}});
-      fixed.push({shape:S=>S.rect(300,8,O[0]+Lr+150,y-36),l1:1},{shape:S=>S.rect(300,8,O[0]+Lr+150,y+36),l1:1});}
-    PK.def(n,{S:0.3,summary,parts,fixed,ground:[[O[0],O[1],0,0]],pose(g){const o={c:[O[0],O[1],g.phi]};if(yoke)o.y=[g.x-g.L*0.5,y,0];else{o.rod=[g.pin[0],g.pin[1],Math.atan2(y-g.pin[1],g.x-g.pin[0])];o.s=[g.x,y,0];}return o;},
+    else if(sim._kind==='roller'){const rr=10;parts[0].pins=[[r,0,1]];parts.push({id:'rod',name:'Connecting rod',role:'link',layer:1,shape:Sh.bar(Lr,14)},{id:'s',name:'Crosshead with roller pins',role:'driven',layer:1,shape:{o:[[-30,-26],[30,-26],[30,-10],[300,-10],[300,10],[30,10],[30,26],[-30,26]],h:[Sh.hole(0,0)]},pins:[[-16,-18,2],[16,-18,2],[-16,18,2],[16,18,2]]},
+        {id:'ro',name:'Guide roller',role:'small',qty:4,layer:2,shape:S=>S.disk(rr,[[0,0]],32)});
+      fixed.push({shape:S=>S.rect(300,8,O[0]+Lr+150,y-18-rr-4),l1:2},{shape:S=>S.rect(300,8,O[0]+Lr+150,y+18+rr+4),l1:2});}
+    else{const fork=sim._kind==='fork';if(fork)parts[0].pins=[[r,0,3]];
+      parts.push(fork?{id:'rod',name:'Forked connecting rod (prongs either side of the crosshead)',role:'link',layer:1,t:3,mesh:K.merge(PK.ext(Sh.bar(Lr,14),0,PK.TH),PK.ext(Sh.bar(Lr,14),2*(PK.TH+PK.GAP),3*PK.TH+2*PK.GAP),PK.ext({o:K.circle(7.5/PK.S*0+26,28,0,0).map(([x,y])=>[x,y]),h:[Sh.hole(0,0)]},0,3*PK.TH+2*PK.GAP))}:{id:'rod',name:'Connecting rod',role:'link',layer:1,shape:Sh.bar(Lr,14)},
+        {id:'s',name:fork?'Crosshead and piston rod (runs between the prongs)':'Slide (crosshead)',role:'driven',layer:fork?2:1,shape:{o:[[-30,-28],[30,-28],[30,-10],[300,-10],[300,10],[30,10],[30,28],[-30,28]],h:fork?[]:[Sh.hole(0,0)]},pins:fork?[[0,0,3]]:undefined});
+      fixed.push({shape:S=>S.rect(300,8,O[0]+Lr+150,y-36),l1:fork?2:1},{shape:S=>S.rect(300,8,O[0]+Lr+150,y+36),l1:fork?2:1});}
+    PK.def(n,{S:0.3,summary,parts,fixed,ground:[[O[0],O[1],0,0]],pose(g){const o={c:[O[0],O[1],g.phi]};if(yoke)o.y=[g.x-g.L*0.5,y,0];else{o.rod=[g.pin[0],g.pin[1],Math.atan2(y-g.pin[1],g.x-g.pin[0])];o.s=[g.x,y,0];
+        if(sim._kind==='roller'){const a=-(g.x-O[0])/10;o.ro=[[g.x-16,y-18,a],[g.x+16,y-18,a],[g.x-16,y+18,-a],[g.x+16,y+18,-a]];}}return o;},
       drive:'Turn the crank disk by its pin.'});}
   /* flyball governor (gov sims) */
   function govModel(n,summary){const sim=window.MB.SIMS[n];if(!sim)return;const U=PK.U,Lg=(sim.L||120)*0.25,top=U.BT+70;

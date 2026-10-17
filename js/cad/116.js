@@ -79,8 +79,8 @@ for(const n of [122,125]){const sim=window.MB.SIMS[n];const A=[sim.A.x,sim.A.y];
   ground:[[G[0],G[1],0,1]],fixed:[{shape:S=>S.rect(10,300,G[0]-r-1.25*m-24,G[1]-60),l1:1},{shape:S=>S.rect(10,300,G[0]+r+1.25*m+24,G[1]-60),l1:1}],
   pose(g){return{g:[G[0],G[1],g.lam+PI/5],gt:[G[0],G[1],g.lam],ra:[G[0]-r,G[1]+g.yl,0],rb:[G[0]+r,G[1]+g.yr,0]};},drive:'Rock the lever: the racks go up and down by turns.'});}
 /* ---------- 129 Chinese windlass ---------- */
-{const sim=window.MB.SIMS[129],B=[400,110],r1=sim.r1,r2=sim.r2,rp=(r1+r2)/2;
- PK.def(129,{S:0.4,up:true,summary:'The Chinese windlass: the barrel has two diameters; the rope winds onto the large one while it unwinds from the small one, and the pulley hanging in the loop rises by half the difference of the two circumferences per turn: a huge mechanical advantage from a simple drum.',
+for(const n of [129,352]){const sim=window.MB.SIMS[n];if(!sim)continue;const B=[400,110],r1=sim.r1,r2=sim.r2,rp=(r1+r2)/2;
+ PK.def(n,{S:0.4,up:true,summary:'The Chinese windlass: the barrel has two diameters; the rope winds onto the large one while it unwinds from the small one, and the pulley hanging in the loop rises by half the difference of the two circumferences per turn: a huge mechanical advantage from a simple drum.',
   parts:[{id:'b',name:'Two-diameter barrel with crank',role:'driver',layer:1,mesh:K.merge(K.lathe([[PK.BORER,0],[r1*0.4+1.5,0],[r1*0.4+1.5,1.2],[r1*0.4,2],[r1*0.4,5],[r2*0.4+1.5,5.2],[r2*0.4,6],[r2*0.4,9],[r2*0.4+1.5,9.8],[r2*0.4+1.5,11],[PK.BORER,11]],64),K.cyl(2.5,11,22,16,r2*0.4-3,0))},
     {id:'p',name:'Running pulley with hook',role:'driven',layer:1,mesh:K.merge(PK.Mesh.pulley(rp*0.4,8),K.box(4,4,0,8,0,-rp*0.4-6))}],
   ground:[[B[0],B[1],1,3]],
