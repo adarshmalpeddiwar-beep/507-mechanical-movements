@@ -84,16 +84,17 @@ for(const n of [300,301]){const sim=window.MB.SIMS[n];if(!sim||!sim.G||!sim.G.ro
 PK._S(0.3);
 
 /* cylinder 294, 295 */
-for(const n of [294,295]){const sim=window.MB.SIMS[n];if(!sim||!sim.G||!sim.G.band)continue;const G=sim.G,o=G.o,E=G.E,Cc=G.Cc,S0=0.6,T=PK.TH;PK._S(S0);
+for(const n of [294,295,402]){const sim=window.MB.SIMS[n];if(!sim||!sim.G||!sim.G.band)continue;const twin=n===402,rg=40,B2=[0,0];const G=sim.G,o=G.o,E=G.E,Cc=G.Cc,S0=0.6,T=PK.TH;PK._S(S0);
  const hub=r=>exm(K.circle(r,28),0,T,[K.circle(PK.BORER/S0,24)]);
  const wheel=K.merge(exm(K.circle(G.R-28,64),0,T,[K.circle(PK.BORER/S0,24)]),...G.stalks.map(q=>exm(q.pts,0,T)),...G.heads.map(q=>exm(q.pts,T-0.2,PK.zl(1)-PK.zl(0)+T)));
  const Hb=PK.zl(3)-PK.zl(1)+T+3;
- PK.def(n,{S:S0,summary:'The cylinder escapement: the balance staff is a half-cylinder standing at the rim of the escape wheel. Each tooth is a wedge raised on a stalk; it rests on the outside of the cylinder, slips in through the opening (its slope pushing the lip), rests on the inside, and leaves on the return swing, pushing the other lip: an impulse on every swing.',
+ PK.def(n,{S:S0,summary:twin?'A cylinder escapement with twin balances: the balance on the cylinder staff is geared to a second, equal balance, so the two always turn in opposite directions. A jolt that would hurry one would hold back the other, so the pair keep time undisturbed; the escape wheel works through the half-cylinder exactly as in the ordinary cylinder escapement.':'The cylinder escapement: the balance staff is a half-cylinder standing at the rim of the escape wheel. Each tooth is a wedge raised on a stalk; it rests on the outside of the cylinder, slips in through the opening (its slope pushing the lip), rests on the inside, and leaves on the return swing, pushing the other lip: an impulse on every swing.',
   parts:[{id:'w',name:`Escape wheel, ${G.N} raised wedge teeth`,role:'driven',layer:0,mesh:wheel,note:'print upright as one piece; the wedges stand on the ends of the stalks'},
-   {id:'c',name:'Half-cylinder',role:'driver',layer:1,mesh:exm(G.band,0,T)},{id:'cc',name:'Cylinder cap with staff (glue on the cylinder)',role:'driver',layer:2,mesh:K.merge(exm(K.circle(G.ro,40),0,T),K.cyl(PK.PINR-0.05,T,Hb,20),K.cyl(5,Hb,Hb+3,24))},
+   {id:'c',name:'Half-cylinder',role:'driver',layer:1,mesh:exm(G.band,0,T)},{id:'cc',name:twin?'Cylinder cap with staff, gear and balance (glue on the cylinder)':'Cylinder cap with staff (glue on the cylinder)',role:'driver',layer:2,mesh:twin?K.merge(exm(K.circle(G.ro,40),0,T),K.cyl(PK.PINR-0.05,T,Hb,20),exm(Sh.gearOutline(rg,20),Hb-1,Hb-1+T),exm(K.circle(36,48),Hb-1+T+0.5,Hb+2*T,[K.circle(30,48)]),...[0,1,2].map(k=>exm(armPts([0,0],[33*Math.cos(k*TAU/3),33*Math.sin(k*TAU/3)],2.5),Hb-1+T+0.5,Hb+2*T))):K.merge(exm(K.circle(G.ro,40),0,T),K.cyl(PK.PINR-0.05,T,Hb,20),K.cyl(5,Hb,Hb+3,24))},
+   ...(twin?[{id:'b2',name:'Second balance with its gear',role:'driven',layer:5,dz:1.5,mesh:K.merge(exm(Sh.gearOutline(rg,20),0,T,[K.circle(PK.BORER/S0,24)]),exm(K.circle(36,48),T+0.5,2*T+1,[K.circle(30,48)]),...[0,1,2].map(k=>exm(armPts([0,0],[33*Math.cos(k*TAU/3),33*Math.sin(k*TAU/3)],2.5),T+0.5,2*T+1)),exm(K.circle(6,24),T+0.5,2*T+1,[K.circle(PK.BORER/S0,24)]))}]:[]),
    {id:'br',name:'Bridge',role:'frame',layer:3,shape:S=>({o:[[Cc[0]-18,Cc[1]-14],[Cc[0]-18,Cc[1]+14],[Cc[0]+G.R+40,Cc[1]+30],[Cc[0]+G.R+40,Cc[1]-30]],h:[S.hole(Cc[0],Cc[1]),S.hole(Cc[0]+G.R+24,Cc[1]-14),S.hole(Cc[0]+G.R+24,Cc[1]+14)]})}],
-  ground:[[E[0],E[1],0,0,false],[Cc[0]+G.R+24,Cc[1]-14,3,3],[Cc[0]+G.R+24,Cc[1]+14,3,3]],
-  pose(g){const a=g.th+(o.c0??PI/2);return{w:[E[0],E[1],g.W],c:[Cc[0],Cc[1],a],cc:[Cc[0],Cc[1],a],br:[0,0,0]};},drive:'Turn the staff knob to and fro while urging the wheel round: a wedge passes through the cylinder at each swing.'});}
+  ground:[[E[0],E[1],0,0,false],[Cc[0]+G.R+24,Cc[1]-14,3,3],[Cc[0]+G.R+24,Cc[1]+14,3,3],...(twin?[[Cc[0],Cc[1]-2*rg,5,7]]:[])],
+  pose(g){const a=g.th+(o.c0??PI/2),q={w:[E[0],E[1],g.W],c:[Cc[0],Cc[1],a],cc:[Cc[0],Cc[1],a],br:[0,0,0]};if(twin)q.b2=[Cc[0],Cc[1]-2*rg,-a+PI/20];return q;},drive:'Turn the staff knob to and fro while urging the wheel round: a wedge passes through the cylinder at each swing.'});}
 PK._S(0.3);
 
 /* verge escapements 234, 293, 298, 299 (spatial) */

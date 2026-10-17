@@ -51,4 +51,6 @@ fix them with attention to detail, and give EVERY mechanism a 3D-printable model
   Lesson: never write `x.length?…:null` inside K.merge (meshes have no length).
 - 361–400: 2D in sims_dd.js: 361 pin clutch (pins meet; simulated pick-up), 362 slanted groove drum, 364/398 exact Geneva via lockTooth (N 12 / 4), 366 drill press (bevel, sliding spindle, lever), 372 White's dynamometer, 379/380 cramp drills (distinct), 381 wedge clamp (1 in 2), 384 log-spiral volute drawer, 385 door closer (fixed-length link, slide below the wall), 390 two drums/pawls/ratchets + flywheel (simulated), 391 weighted racks taking turns on one side, 397 dwell slot (clipped cosine).
   Models: cad_models_361.js; loops extended: 364/398 → Geneva loop (051, ext summaries), 371 → mangle (025), 389 → leverPawlModel (051), 394 → 119 (116).
-- Next: 401+ (cad_models_401.js).
+- 401–440: 2D in sims_de.js: 402 twin balances geared on a real cylinder escapement (cylEsc), 403 cyclograph (inscribed angle), 408 centrolinead (circle through pins and far point), 412 capstan purchase consistent, 419 cradle four-bar, 421 trunk of fixed length, 422 vane fast with arm, 423 crank-rocker with two vanes, 426–428 vanes slide to follow the case (ROT.vaneL; abutment draw-in).
+  Models: cad_models_401.js; loops: 402 → cylinder loop (twin balance + gears), 414 → 191, 416 → 158, 429 → noncirc (025).
+- Next: 441+ (cad_models_441.js).

@@ -5,8 +5,8 @@ const hubArc=(pts,r=18)=>{/* pie sector (last point at the centre) → sector wi
 const axle=(top,knob=true)=>{/* glued-in pinion axle (mm, from z=0 up to `top`), optional knob */const m=[K.cyl(PK.PINR-0.05,0,top,24)];if(knob)m.push(K.cyl(5,top,top+7,32));return K.merge(...m);};
 
 /* 191 scroll gear and sliding pinion */
-{const sim=window.MB.SIMS[191],O=sim.O,rp=sim.rp;
- PK.def(191,{S:0.3,summary:'A scroll gear: its teeth run along a spiral, so the driving radius grows steadily through the turn. The pinion rides on a carriage that slides along a guide, held against the scroll by a rubber band, and turns faster and faster as the radius grows.',
+for(const n of [191,414]){const sim=window.MB.SIMS[n];if(!sim||!sim.O)continue;const O=sim.O,rp=sim.rp;
+ PK.def(n,{S:0.3,summary:'A scroll gear: its teeth run along a spiral, so the driving radius grows steadily through the turn. The pinion rides on a carriage that slides along a guide, held against the scroll by a rubber band, and turns faster and faster as the radius grows.',
   parts:[{id:'sc',name:'Scroll gear',role:'driver',layer:1,shape:pxPoly(sim.outline),bosses:[[-30,18,14,3.5]]},{id:'p',name:'Pinion, 10 teeth',role:'driven',layer:1,shape:S=>S.gear(rp,10)},
    {id:'cg',name:'Carriage',role:'link',layer:0,shape:S=>S.rect(60,40,0,0,[]),pins:[[0,0,1]]}],
   ground:[[O[0],O[1],1,1],[O[0]+384,O[1],0,1]],fixed:[{shape:S=>S.rect(330,8,O[0]+205,O[1]-26),l1:0},{shape:S=>S.rect(330,8,O[0]+205,O[1]+26),l1:0}],
