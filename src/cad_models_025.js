@@ -114,7 +114,7 @@ for(const n of [35,221,201,222]){const sim=window.MB.SIMS[n];if(!sim)continue;co
   pose(g){const rs=[];for(let k=0;k<N;k++){const t=g.w+k*TAU/N,r=70+25*Math.cos(3*(t-g.phi))+12;rs.push([O[0]+r*Math.cos(t),O[1]+r*Math.sin(t),0]);}return{w:[O[0],O[1],g.w],c:[O[0],O[1],g.phi],r:rs};},drive:'Turn the lobed driver by its knob.'});}
 /* 36, 192–194 mangle wheels: pins on a closed track at the pinion's exact pitch; the pinion's axle runs down into a groove that
    follows the track (an outer guide ring and an island, both glued to the wheel), so it keeps in mesh as it passes outside and inside */
-for(const n of [36,192,193,194]){const sim=window.MB.SIMS[n];if(!sim||!sim.geo)continue;const G=sim.geo,O=[400,300],S0=0.42;PK._S(S0);
+for(const n of [36,192,193,194,371]){const sim=window.MB.SIMS[n];if(!sim||!sim.geo)continue;const G=sim.geo,O=[400,300],S0=0.42;PK._S(S0);
  const pins=G.pins.map(p=>[p[0],p[1],PK.TH+PK.GAP-0.3,1.4]),Rw=G.Rw,gw=(PK.PINR*2+0.8)/S0,axR=PK.PINR,Hb=O[1]-G.Rm,win=G.q+(axR+0.6)/S0;
  const pin=K.merge(K.cyl(axR-0.05,0,PK.zl(4)-PK.zl(1)+3,24),K.cyl(5,PK.zl(4)-PK.zl(1)+3,PK.zl(4)-PK.zl(1)+10,32));
  PK.def(n,{S:S0,summary:({36:'A mangle wheel with a single row of pins. The pinion turns steadily one way; it drives the wheel round from outside the row, climbs round the end pin, and drives it back from inside. Its axle runs in a groove that follows the row, so it can never jump out of mesh.',
