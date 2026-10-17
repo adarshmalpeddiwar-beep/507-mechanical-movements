@@ -55,4 +55,4 @@ fix them with attention to detail, and give EVERY mechanism a 3D-printable model
   Models: cad_models_401.js; loops: 402 → cylinder loop (twin balance + gears), 414 → 191, 416 → 158, 429 → noncirc (025).
 - 441–475: 2D in sims_df.js: 445/446 cone-valve water lifter (own drawing, close-up), 455/456 vanes (vaneL, heart cam with abutment), 460 scoop crank-rocker, 463 weir leaf on a third-height axle, 467 jack lever-link, 470 steam hammer rigid piston/head; sims_c4 airHammer rod rigid and pump rod fixed length.
   Models: cad_models_441.js (sections for pumps/rams), rotary loop in 401 extended to 455/456.
-- Next: 476+ (cad_models_476.js).
+- 476–507: models for every mechanism in cad_models_476.js (489 printable eccentric-ring feathering wheel, 502/504/505/507 epicyclic trains with meshing phases); 2D fixes 493 lewis, 507 slow epicyclic (41/40 with 39+40 planet), 486, 489.
