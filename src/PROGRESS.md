@@ -53,4 +53,6 @@ fix them with attention to detail, and give EVERY mechanism a 3D-printable model
   Models: cad_models_361.js; loops extended: 364/398 → Geneva loop (051, ext summaries), 371 → mangle (025), 389 → leverPawlModel (051), 394 → 119 (116).
 - 401–440: 2D in sims_de.js: 402 twin balances geared on a real cylinder escapement (cylEsc), 403 cyclograph (inscribed angle), 408 centrolinead (circle through pins and far point), 412 capstan purchase consistent, 419 cradle four-bar, 421 trunk of fixed length, 422 vane fast with arm, 423 crank-rocker with two vanes, 426–428 vanes slide to follow the case (ROT.vaneL; abutment draw-in).
   Models: cad_models_401.js; loops: 402 → cylinder loop (twin balance + gears), 414 → 191, 416 → 158, 429 → noncirc (025).
-- Next: 441+ (cad_models_441.js).
+- 441–475: 2D in sims_df.js: 445/446 cone-valve water lifter (own drawing, close-up), 455/456 vanes (vaneL, heart cam with abutment), 460 scoop crank-rocker, 463 weir leaf on a third-height axle, 467 jack lever-link, 470 steam hammer rigid piston/head; sims_c4 airHammer rod rigid and pump rod fixed length.
+  Models: cad_models_441.js (sections for pumps/rams), rotary loop in 401 extended to 455/456.
+- Next: 476+ (cad_models_476.js).

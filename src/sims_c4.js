@@ -158,8 +158,8 @@ gyro(355,{});gyro(356,{gimbal:true});
 /* ---- hammers ---- */
 function airHammer(num,o){return reg({num,outLabel:'Hammer height, mm',concept:true,
   update(phi){const y=60*(1+Math.sin(phi))/2+10;this.g={phi,y,up:Math.cos(phi)>0};},output(){return this.g.y;},
-  draw(){const g=this.g,X=420;ctx.beginPath();ctx.rect(X-60,80,120,260);ctx.rect(X-50,90,100,240);paint(C.part2,C.ink);const hy=320-g.y*2;steamBox(X-50,90,100,hy-90,!g.up);ctx.beginPath();ctx.rect(X-50,hy,100,20);paint(C['steel-fill'],C.ink);bar(X,hy+20,X,400-g.y,16,C.part);ctx.beginPath();ctx.rect(X-60,400-g.y,120,50);paint(C['steel-fill'],C.ink);ctx.beginPath();ctx.rect(X-90,460,180,30);paint(C.part2,C.ink);
-    if(o.pump){const O=[180,250],pin=[O[0]+40*Math.cos(g.phi),O[1]+40*Math.sin(g.phi)];flywheel(O[0],O[1],70,g.phi);ctx.beginPath();ctx.rect(240,150,50,140);paint(C.part2,C.ink);bar(pin[0],pin[1],265,200+20*Math.sin(g.phi),8,C.part);rope([[290,170],[X-60,170]]);label('PUMP AND RESERVOIR',220,340,'center');}
+  draw(){const g=this.g,X=420;ctx.beginPath();ctx.rect(X-60,80,120,260);ctx.rect(X-50,90,100,240);paint(C.part2,C.ink);const hy=320-g.y;steamBox(X-50,90,100,hy-90,!g.up);ctx.beginPath();ctx.rect(X-50,hy,100,20);paint(C['steel-fill'],C.ink);bar(X,hy+20,X,400-g.y,16,C.part);ctx.beginPath();ctx.rect(X-60,400-g.y,120,50);paint(C['steel-fill'],C.ink);ctx.beginPath();ctx.rect(X-90,460,180,30);paint(C.part2,C.ink);
+    if(o.pump){const O=[180,250],pin=[O[0]+40*Math.cos(g.phi),O[1]+40*Math.sin(g.phi)];flywheel(O[0],O[1],70,g.phi);const py=pin[1]-Math.sqrt(140*140-(265-pin[0])**2);ctx.beginPath();ctx.rect(240,50,50,210);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(242,py-10,46,14);paint(C['steel-fill'],C.ink);bar(pin[0],pin[1],265,py,8,C.part);pivot(pin[0],pin[1],4);rope([[290,70],[X-60,100]]);label('PUMP AND RESERVOIR',220,340,'center');}
     label(o.label,400,30,'center');},
   reads(){return[['Stroke',this.g.up?'lifting':'falling']];}});}
 airHammer(471,{label:'ATMOSPHERIC HAMMER'});airHammer(472,{pump:true,label:'AIR HAMMER FED BY A CRANK-DRIVEN PUMP'});
