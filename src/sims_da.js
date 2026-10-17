@@ -34,3 +34,20 @@ camFlat(286,{r:t=>{const u=mod(t+PI/2-0.25+PI,TAU)-PI;return Math.abs(u)<1.1?36+
    rope([[A[0]+r-26,A[1]+20],[Wp[0]-26,Wp[1]]]);rope([[B[0]-r,B[1]],[Wp[0]+26,Wp[1]]]);rope([[B[0]+r,B[1]],[Cp[0]+22,Cp[1]]]);
    weight(Wp[0],Wp[1]+26,60,70,'WEIGHT');weight(Cp[0],Cp[1]+22,36,36,'');
    label(g.wind?'WINDING · pull the cord over B: the weight rises, yet A is still driven':'GOING · the weight descends and drives A',400,500,'center');label('A · going pulley (clock)',A[0]-40,A[1]-64,'center');label('B · winding pulley with click',B[0]+40,B[1]-64,'center');};}
+
+/* 334 · the rack on the piston rod meshes with the toothed end of the beam: same module (5), rack moves R·θ */
+{const m=SIMS_NEW[334];m.draw=function(){const g=this.g,F=[460,200],R=150,md=5,p=PI*md,t=Math.tan(20*PI/180),x0=F[0]-R;ctx.save();ctx.translate(F[0],F[1]);ctx.rotate(g.a);ctx.beginPath();ctx.rect(-10,-12,280,24);paint(C['brass-fill'],C.ink);ctx.restore();
+  poly(gearPts(F[0],F[1],R,60,g.a+PI,false,PI-0.5+g.a,PI+0.5+g.a));ctx.lineTo(F[0],F[1]);ctx.closePath();paint(C['brass-fill'],C.ink);pivot(F[0],F[1],7);
+  const yc=F[1]-R*g.a,pts=[[x0-1.25*md-14,yc-150]];for(let k=-9;k<=9;k++){const y=yc+p/2+k*p;if(Math.abs(y-yc)>145)continue;const a=p/4-0.5,b=a+1.25*md*t,c=a-md*t;pts.push([x0-1.25*md,y-b],[x0+md,y-c],[x0+md,y+c],[x0-1.25*md,y+b]);}pts.push([x0-1.25*md,yc+150],[x0-1.25*md-14,yc+150]);
+  poly(pts);ctx.closePath();paint(C['steel-fill'],C.ink);bar(x0-14,yc+150,x0-14,yc+230,10,C.part);ctx.beginPath();ctx.rect(x0-60,yc+230,90,60);paint(C.part2,C.ink);label('RACK ON THE PISTON ROD WORKS THE BEAM SECTOR',400,40,'center');};}
+
+/* 351 · rack stamp: a 16-tooth pinion with teeth on only ten of its places lifts the toothed stamp rod one tooth per tooth, then
+   its blank part comes round, the rod drops, and the first tooth catches the bottom of the rack again */
+{const m=SIMS_NEW[351],P=[300,230],R=40,Z=16,tau=TAU/Z,p=R*tau,md=2*R/Z,nT=10;
+ m.update=function(phi){const u=mod(phi,TAU),lim=(nT-0.5)*tau;let y,drop=false;if(u<=lim)y=R*Math.min(u,(nT-1)*tau);else{const f=Math.min(1,(u-lim)/0.12);y=R*(nT-1)*tau*(1-f*f);drop=true;}this.g={phi,y,drop,al:-phi};};
+ m.output=function(){return this.g.y;};
+ m.draw=function(){const g=this.g,X=P[0]+R,yb=P[1]+200-g.y;
+   const pts=[[X+1.25*md+18,P[1]-p*12-g.y],[X+1.25*md,P[1]-p*12-g.y]];for(let j=-12;j<=1;j++){const yc=P[1]+(j+0.5)*p-g.y,a=p/4-0.4,t=Math.tan(20*PI/180);pts.push([X+1.25*md,yc-a-1.25*md*t],[X-md,yc-a+md*t],[X-md,yc+a-md*t],[X+1.25*md,yc+a+1.25*md*t]);}
+   pts.push([X+1.25*md,yb],[X+1.25*md+18,yb]);poly(pts);ctx.closePath();paint(C['steel-fill'],C.ink);ctx.beginPath();ctx.rect(X-6,yb,100,50);paint(C['steel-fill'],C.ink);ctx.beginPath();ctx.rect(X-20,P[1]+250,140,24);paint(C.part2,C.ink);
+   polyAt(sectorExt(R,Z,-0.01,(nT-1)*tau+0.01),P[0],P[1],g.al);circ(P[0],P[1],6,false);paint(C['brass-fill'],C.ink);pivot(P[0],P[1],5);
+   label(g.drop?'DROP · the blank part of the pinion lets the stamp fall':'LIFTING · one tooth at a time',X+120,P[1]);label('PART-TOOTHED PINION LIFTS THE RACK, THEN LETS IT FALL',400,505,'center');};}

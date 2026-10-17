@@ -938,7 +938,7 @@ reg({num:344,outLabel:'Cylinder angle, degrees',O:[560,260],T:[250,260],r:65,
   output(){return this.g.a*180/PI;},
   draw(){const g=this.g,O=this.O,T=this.T;circ(O[0],O[1],120);paint(C.part,C.ink);for(let k=0;k<5;k++){const a=g.phi+k*TAU/5;bar(O[0],O[1],O[0]+110*Math.cos(a),O[1]+110*Math.sin(a),8,C.part2);}
     bar(O[0],O[1],g.pin[0],g.pin[1],16,C['brass-fill']);
-    ctx.save();ctx.translate(T[0],T[1]);ctx.rotate(g.a);ctx.beginPath();ctx.rect(-170,-44,200,88);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(g.d-260-20,-34,30,68);paint(C['steel-fill'],C.ink);bar(g.d-250,0,g.d,0,10,C.part);ctx.restore();
+    ctx.save();ctx.translate(T[0],T[1]);ctx.rotate(g.a);ctx.beginPath();ctx.rect(-90,-44,250,88);ctx.rect(-80,-34,230,68);paint(C.part2,C.ink);ctx.beginPath();ctx.rect(g.d-250-15,-34,30,68);paint(C['steel-fill'],C.ink);bar(g.d-235,0,g.d,0,10,C.part);ctx.restore();
     pivot(g.pin[0],g.pin[1],5);pivot(O[0],O[1],6);circ(T[0],T[1],14);paint(C.hi,C.ink);pivot(T[0],T[1],5);ground(T[0],T[1]+60,60);ctx.beginPath();ctx.rect(T[0]-8,T[1]+14,16,46);paint(C.part2,C.ink);
     label('CYLINDER ROCKS ON TRUNNIONS',T[0],T[1]-90,'center');},
   reads(){const g=this.g;return[['Cylinder angle',`${(g.a*180/PI).toFixed(1)}°`],['Piston stroke',`${2*this.r} mm`],['Valve','set by the rocking itself']];}});
@@ -2447,8 +2447,8 @@ function shapedYoke(num,o){return reg({num,outLabel:'Yoke position, mm',concept:
   u(phi){return o.u(mod(phi,TAU))*80;},
   update(phi){this.g={phi,u:this.u(phi)};},output(){return this.g.u;},
   draw(){const g=this.g,O=[260,270],r=80,X=O[0]+g.u;circ(O[0],O[1],110);paint(C['brass-fill'],C.ink);const pin=[O[0]+r*Math.cos(g.phi),O[1]+r*Math.sin(g.phi)];
-    ctx.save();ctx.translate(X,0);const pts=[];for(let i=0;i<=200;i++){const t=i/200*TAU;pts.push([O[0]+r*Math.cos(t)-this.u(t),O[1]+r*Math.sin(t)]);}ctx.beginPath();ctx.rect(O[0]-60,O[1]-120,120,240);paint(C['steel-fill'],C.ink);ctx.lineWidth=16;ctx.strokeStyle=C.ink;ctx.beginPath();poly(pts.map(p=>[p[0]-O[0]+O[0]-0,p[1]]),false);ctx.stroke();ctx.lineWidth=13;ctx.strokeStyle=C.sheet;ctx.stroke();ctx.restore();
-    bar(X+60,O[1],760,O[1],14,C.part);ctx.beginPath();ctx.rect(560,O[1]-24,180,8);ctx.rect(560,O[1]+16,180,8);paint(C.part2,C.ink);bar(O[0],O[1],pin[0],pin[1],10,C.part2);circ(pin[0],pin[1],7);paint(C.hi,C.ink);pivot(O[0],O[1],5);label(o.label,400,490,'center');},
+    ctx.save();ctx.translate(g.u,0);const pts=[];for(let i=0;i<=200;i++){const t=i/200*TAU;pts.push([O[0]+r*Math.cos(t)-this.u(t),O[1]+r*Math.sin(t)]);}const xs=pts.map(p=>p[0]),x0=Math.min(...xs)-22,x1=Math.max(...xs)+22;ctx.beginPath();ctx.rect(x0,O[1]-r-24,x1-x0,2*r+48);paint(C['steel-fill'],C.ink);ctx.lineWidth=16;ctx.strokeStyle=C.ink;ctx.beginPath();poly(pts.map(p=>[p[0]-O[0]+O[0]-0,p[1]]),false);ctx.stroke();ctx.lineWidth=13;ctx.strokeStyle=C.sheet;ctx.stroke();ctx.restore();
+    {const xs2=[];for(let i=0;i<=200;i++){const t=i/200*TAU;xs2.push(O[0]+r*Math.cos(t)-this.u(t));}bar(Math.max(...xs2)+22+g.u,O[1],760,O[1],14,C.part);}ctx.beginPath();ctx.rect(560,O[1]-24,180,8);ctx.rect(560,O[1]+16,180,8);paint(C.part2,C.ink);bar(O[0],O[1],pin[0],pin[1],10,C.part2);circ(pin[0],pin[1],7);paint(C.hi,C.ink);pivot(O[0],O[1],5);label(o.label,400,490,'center');},
   reads(v){return[['Yoke',`${this.g.u.toFixed(0)} mm`],['Speed',`${v.toFixed(0)} mm/s`],['Profile',o.what]];}});}
 shapedYoke(354,{u:t=>{const f=t/TAU;return f<0.5?1-4*f:-3+4*f;},label:'SHAPED GROOVE GIVES A UNIFORM SPEED',what:'constant speed each way'});
 shapedYoke(146,{u:t=>{const c=Math.cos(t);return Math.sign(c)*Math.pow(Math.abs(c),0.5);},label:'SHAPED YOKE GROOVE',what:'quick middle, slow ends',concept:true});
@@ -4303,6 +4303,23 @@ camFlat(286,{r:t=>{const u=mod(t+PI/2-0.25+PI,TAU)-PI;return Math.abs(u)<1.1?36+
    rope([[A[0]+r-26,A[1]+20],[Wp[0]-26,Wp[1]]]);rope([[B[0]-r,B[1]],[Wp[0]+26,Wp[1]]]);rope([[B[0]+r,B[1]],[Cp[0]+22,Cp[1]]]);
    weight(Wp[0],Wp[1]+26,60,70,'WEIGHT');weight(Cp[0],Cp[1]+22,36,36,'');
    label(g.wind?'WINDING · pull the cord over B: the weight rises, yet A is still driven':'GOING · the weight descends and drives A',400,500,'center');label('A · going pulley (clock)',A[0]-40,A[1]-64,'center');label('B · winding pulley with click',B[0]+40,B[1]-64,'center');};}
+
+/* 334 · the rack on the piston rod meshes with the toothed end of the beam: same module (5), rack moves R·θ */
+{const m=SIMS_NEW[334];m.draw=function(){const g=this.g,F=[460,200],R=150,md=5,p=PI*md,t=Math.tan(20*PI/180),x0=F[0]-R;ctx.save();ctx.translate(F[0],F[1]);ctx.rotate(g.a);ctx.beginPath();ctx.rect(-10,-12,280,24);paint(C['brass-fill'],C.ink);ctx.restore();
+  poly(gearPts(F[0],F[1],R,60,g.a+PI,false,PI-0.5+g.a,PI+0.5+g.a));ctx.lineTo(F[0],F[1]);ctx.closePath();paint(C['brass-fill'],C.ink);pivot(F[0],F[1],7);
+  const yc=F[1]-R*g.a,pts=[[x0-1.25*md-14,yc-150]];for(let k=-9;k<=9;k++){const y=yc+p/2+k*p;if(Math.abs(y-yc)>145)continue;const a=p/4-0.5,b=a+1.25*md*t,c=a-md*t;pts.push([x0-1.25*md,y-b],[x0+md,y-c],[x0+md,y+c],[x0-1.25*md,y+b]);}pts.push([x0-1.25*md,yc+150],[x0-1.25*md-14,yc+150]);
+  poly(pts);ctx.closePath();paint(C['steel-fill'],C.ink);bar(x0-14,yc+150,x0-14,yc+230,10,C.part);ctx.beginPath();ctx.rect(x0-60,yc+230,90,60);paint(C.part2,C.ink);label('RACK ON THE PISTON ROD WORKS THE BEAM SECTOR',400,40,'center');};}
+
+/* 351 · rack stamp: a 16-tooth pinion with teeth on only ten of its places lifts the toothed stamp rod one tooth per tooth, then
+   its blank part comes round, the rod drops, and the first tooth catches the bottom of the rack again */
+{const m=SIMS_NEW[351],P=[300,230],R=40,Z=16,tau=TAU/Z,p=R*tau,md=2*R/Z,nT=10;
+ m.update=function(phi){const u=mod(phi,TAU),lim=(nT-0.5)*tau;let y,drop=false;if(u<=lim)y=R*Math.min(u,(nT-1)*tau);else{const f=Math.min(1,(u-lim)/0.12);y=R*(nT-1)*tau*(1-f*f);drop=true;}this.g={phi,y,drop,al:-phi};};
+ m.output=function(){return this.g.y;};
+ m.draw=function(){const g=this.g,X=P[0]+R,yb=P[1]+200-g.y;
+   const pts=[[X+1.25*md+18,P[1]-p*12-g.y],[X+1.25*md,P[1]-p*12-g.y]];for(let j=-12;j<=1;j++){const yc=P[1]+(j+0.5)*p-g.y,a=p/4-0.4,t=Math.tan(20*PI/180);pts.push([X+1.25*md,yc-a-1.25*md*t],[X-md,yc-a+md*t],[X-md,yc+a-md*t],[X+1.25*md,yc+a+1.25*md*t]);}
+   pts.push([X+1.25*md,yb],[X+1.25*md+18,yb]);poly(pts);ctx.closePath();paint(C['steel-fill'],C.ink);ctx.beginPath();ctx.rect(X-6,yb,100,50);paint(C['steel-fill'],C.ink);ctx.beginPath();ctx.rect(X-20,P[1]+250,140,24);paint(C.part2,C.ink);
+   polyAt(sectorExt(R,Z,-0.01,(nT-1)*tau+0.01),P[0],P[1],g.al);circ(P[0],P[1],6,false);paint(C['brass-fill'],C.ink);pivot(P[0],P[1],5);
+   label(g.drop?'DROP · the blank part of the pinion lets the stamp fall':'LIFTING · one tooth at a time',X+120,P[1]);label('PART-TOOTHED PINION LIFTS THE RACK, THEN LETS IT FALL',400,505,'center');};}
 
 /* ================= escapements: a contact solver =================
    The escape wheel is always urged forward by the train. Each frame the oscillator (pendulum, balance or lever) is set from the
