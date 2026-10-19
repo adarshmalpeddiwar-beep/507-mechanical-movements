@@ -156,10 +156,32 @@ footer p{margin:0;max-width:80ch}
 .cadinfo li{margin:0 0 7px}
 @media (max-width:880px){.cadgrid{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:760px){.cadhead,.cadinfo{grid-template-columns:minmax(0,1fr)}.cadcv{aspect-ratio:4/3}.hero{padding:40px 0 30px}.stats{gap:28px}}
+/* live hero */
+body{overflow-x:clip}
+.hero{position:relative;width:100vw;margin-left:calc(50% - 50vw);margin-top:-8px;min-height:min(860px,calc(100svh - 52px));display:flex;align-items:center;justify-content:center;padding:72px 22px 64px;overflow:hidden;isolation:isolate}
+.herobg{position:absolute;inset:0;width:100%;height:100%;z-index:-2;opacity:.6;pointer-events:none}
+:root[data-theme="dark"] .herobg{opacity:.62}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .herobg{opacity:.62}}
+.herofade{position:absolute;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(ellipse 40% 40% at 50% 50%,var(--paper) 0%,color-mix(in srgb,var(--paper) 90%,transparent) 50%,color-mix(in srgb,var(--paper) 30%,transparent) 85%,transparent 100%),linear-gradient(to bottom,var(--paper) 0,transparent 14%,transparent 78%,var(--paper) 100%)}
+.heroin{max-width:900px}
+.cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:30px}
+.cta .btn{font-size:17px;padding:11px 22px}
+.cta .btn:not(.primary){background:color-mix(in srgb,var(--fill) 80%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.hero+.tools{margin-top:8px}
+/* social */
+.tbr{display:flex;align-items:center;gap:6px}
+.social{display:flex;align-items:center;gap:2px}
+.social a{width:34px;height:34px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:var(--muted);transition:color .2s,background-color .2s}
+.social a:hover{color:var(--ink);background:var(--fill);text-decoration:none}
+.social a:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:1px}
+.social svg{width:17px;height:17px;display:block}
+.tbr .social{padding-right:6px;margin-right:4px;border-right:1px solid var(--rule)}
+footer{align-items:center}
+@media (max-width:560px){.brand span{display:none}.social a{width:32px;height:32px}}
 </style>
 
 <header class="topbar"><a class="brand" href="#">507 <span>Mechanical Movements</span></a>
-<button class="themebtn" id="themebtn" type="button" aria-label="Switch to dark mode"><svg id="themeico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></svg></button></header>
+<div class="tbr"><span id="topsocial"></span><button class="themebtn" id="themebtn" type="button" aria-label="Switch to dark mode"><svg id="themeico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></svg></button></div></header>
 <div class="wrap" id="app"></div>
 
 <script src="js/data.js"></script>

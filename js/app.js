@@ -24,6 +24,15 @@ function paintSheet(g,cw,grid=true){const s=cw/W;g.setTransform(s,0,0,s,0,0);g.f
 function drawSim(g,cw,sim){paintSheet(g,cw);window.MB.setCtx(g);try{sim.draw();}catch(e){console.error('draw',sim.num,e);}}
 function prime(sim,phi){sim.reset&&sim.reset();const n=Math.max(1,Math.ceil(phi/0.03));for(let i=0;i<=n;i++)sim.update(phi*i/n);}
 
+/* ---------- social links (top-right corner and footer) ---------- */
+const SOCIAL=[
+  ['X','https://x.com/underdogbuilder','<path fill="currentColor" d="M17.75 3h3.07l-6.7 7.66L22 21h-6.17l-4.83-6.32L5.47 21H2.4l7.17-8.2L2 3h6.33l4.37 5.78L17.75 3Zm-1.08 16.18h1.7L7.4 4.73H5.58l11.09 14.45Z"/>'],
+  ['LinkedIn','https://www.linkedin.com/in/adarshmalpeddiwar/','<path fill="currentColor" d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28ZM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12Zm1.78 13.02H3.56V9h3.56v11.45ZM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0Z"/>'],
+  ['YouTube','https://www.youtube.com/@underdogbuilder','<path fill="currentColor" d="M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.5 3.55 12 3.55 12 3.55s-7.5 0-9.38.5A3.02 3.02 0 0 0 .5 6.19C0 8.07 0 12 0 12s0 3.93.5 5.81a3.02 3.02 0 0 0 2.12 2.14c1.88.5 9.38.5 9.38.5s7.5 0 9.38-.5a3.02 3.02 0 0 0 2.12-2.14C24 15.93 24 12 24 12s0-3.93-.5-5.81ZM9.55 15.57V8.43L15.82 12l-6.27 3.57Z"/>'],
+  ['Instagram','https://www.instagram.com/underdogbuilder/','<rect x="2.6" y="2.6" width="18.8" height="18.8" rx="5.4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.5" cy="6.5" r="1.25" fill="currentColor"/>']];
+const SOCIAL_HTML=`<nav class="social" aria-label="@underdogbuilder on social media">${SOCIAL.map(([n,u,ic])=>`<a href="${u}" target="_blank" rel="noopener me" aria-label="@underdogbuilder on ${n}" title="${n}"><svg viewBox="0 0 24 24" aria-hidden="true">${ic}</svg></a>`).join('')}</nav>`;
+{const t=document.getElementById('topsocial');if(t)t.outerHTML=SOCIAL_HTML;}
+
 /* ---------- home ---------- */
 let state={q:store('q')||'',cat:store('cat')||'all',anim:!!store('anim')};
 let thumbObs=null;const thumbQueue=new Set();
@@ -34,14 +43,19 @@ function renderThumb(cv){const n=+cv.dataset.n,sim=SIMS[n];if(!sim||cv.dataset.d
 function home(){stopBench();
   const counts={};MV.forEach(m=>counts[m.c]=(counts[m.c]||0)+1);
   app.innerHTML=`
-  <header class="hero">
+  <header class="hero" id="hero">
+    <canvas class="herobg" id="herobg" aria-hidden="true"></canvas>
+    <div class="herofade" aria-hidden="true"></div>
+    <div class="heroin">
       <div class="eyebrow">Henry T. Brown · 1868 · Interactive edition</div>
       <h1>507 Mechanical<br>Movements.</h1>
       <p class="lede">The classic catalogue of how machines move, rebuilt so every movement runs. Turn them by hand, change their proportions, and print them in 3D.</p>
-    <div class="stats">
-      <div class="stat"><b>507</b><span>movements</span></div>
-      <div class="stat"><b>${nAnim}</b><span>interactive</span></div>
-      <div class="stat"><b>${CATS.length}</b><span>families</span></div>
+      <div class="cta"><a class="btn primary" href="#" id="explore">Explore the movements</a><a class="btn" href="#" id="surprise">Surprise me</a></div>
+      <div class="stats">
+        <div class="stat"><b>507</b><span>movements</span></div>
+        <div class="stat"><b>${nAnim}</b><span>interactive</span></div>
+        <div class="stat"><b>${CATS.length}</b><span>families</span></div>
+      </div>
     </div>
   </header>
   <div class="tools">
@@ -58,6 +72,9 @@ function home(){stopBench();
   $('#q').addEventListener('input',e=>{state.q=e.target.value;store('q',state.q);list();});
   $('#anim').addEventListener('change',e=>{state.anim=e.target.checked;store('anim',state.anim);list();});
   $('#chips').addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b)return;state.cat=b.dataset.k;store('cat',state.cat);document.querySelectorAll('#chips .chip').forEach(x=>x.setAttribute('aria-pressed',x===b));list();});
+  $('#explore').addEventListener('click',e=>{e.preventDefault();$('#q').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});});
+  $('#surprise').addEventListener('click',e=>{e.preventDefault();const ks=Object.keys(SIMS);location.hash='#m'+ks[Math.floor(Math.random()*ks.length)];});
+  startHero();
   if(thumbObs)thumbObs.disconnect();
   thumbObs=new IntersectionObserver(es=>es.forEach(en=>{if(en.isIntersecting){renderThumb(en.target);thumbObs.unobserve(en.target);}}),{rootMargin:'200px'});
   list();
@@ -71,11 +88,38 @@ function list(){const items=MV.filter(matches);$('#count').textContent=`${items.
     ${SIMS[m.n]?`<canvas class="thumb" data-n="${m.n}" aria-hidden="true"></canvas>`:`<div class="plateno" aria-hidden="true">${m.n}</div>`}
     <div class="cbody"><div class="cn"><b>No. ${m.n}</b><span>${hasCad(m.n)?'<span class="badge d3">3D print</span> ':''}${SIMS[m.n]?'<span class="badge">Interactive</span>':''}</span></div><div class="ct">${esc(m.t)}</div><div class="cc">${esc(CATNAME[m.c])}</div></div></a>`).join('');
   grid.querySelectorAll('canvas.thumb').forEach(c=>thumbObs.observe(c));}
-function footer(){return `<footer><p>Descriptions are summarised in plain English from Henry T. Brown, <i>Five Hundred and Seven Mechanical Movements</i> (New York, 1868), now in the public domain. Drawings and simulations are new interpretations, so proportions are illustrative. Brown's text for Nos. 262 and 263 was not available in the copy used.</p><p>Built by <a href="https://www.instagram.com/underdogbuilder/" target="_blank" rel="noopener">@underdogbuilder</a></p></footer>`;}
+function footer(){return `<footer><p>507 Mechanical Movements · Built by <a href="https://www.instagram.com/underdogbuilder/" target="_blank" rel="noopener">@underdogbuilder</a></p>${SOCIAL_HTML}</footer>`;}
+
+/* ---------- hero: live mechanisms behind the title ---------- */
+// Only movements whose drawing depends on the crank angle alone, so they can share the sim objects with the thumbnails.
+const HERO=[24,211,505,344,33,426,497,39,502,421,212,36,145,364,27,31,504,92,347,430,429,148,423,437,55,57,214,412,108,1,119,123,161,185,34];
+let hero=null;
+function stopHero(){if(hero){hero.alive=false;if(hero.obs)hero.obs.disconnect();hero=null;}}
+function startHero(){stopHero();const cv=$('#herobg');if(!cv)return;const g=cv.getContext('2d');g.fillText=g.strokeText=()=>{};
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches,list=HERO.filter(n=>SIMS[n]);
+  const H0={alive:true,vis:true,t:0,last:0,tiles:[],w:0,h:0,tw:0,th:0};hero=H0;
+  function layout(){const r=cv.getBoundingClientRect(),dpr=Math.min(1.5,window.devicePixelRatio||1);H0.w=r.width;H0.h=r.height;cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);H0.dpr=dpr;
+    const tw=Math.max(170,Math.min(320,r.width/4.8)),th=tw*H/W,cols=Math.ceil(r.width/tw)+1,rows=Math.ceil(r.height/th)+2;H0.tw=tw;H0.th=th;H0.rows=rows;H0.tiles=[];
+    let k=0;for(let c=0;c<cols;c++)for(let j=0;j<rows;j++){const n=list[(k*11)%list.length];k++;H0.tiles.push({n,c,j,ph:(k*1.7)%TAU,sp:0.35+((k*37)%11)/22});}}
+  function frame(){const {w,h,tw,th,rows,dpr}=H0;g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,cv.width,cv.height);
+    const ox=(w-Math.ceil(w/tw)*tw)/2-tw/2;
+    for(const T of H0.tiles){const sim=SIMS[T.n];const dir=T.c%2?1:-1,span=rows*th,off=((H0.t*9*dir)%span+span)%span;
+      let y=T.j*th+off+(T.c%2?th/2:0);y=((y%span)+span)%span-th;const x=ox+T.c*tw;if(y>h||y+th<0)continue;
+      const s=tw/W*0.94;g.setTransform(s*dpr,0,0,s*dpr,(x+tw*0.03)*dpr,(y+th*0.03)*dpr);g.save();g.beginPath();g.rect(0,0,W,H);g.clip();g.lineJoin='round';
+      window.MB.setCtx(g);try{sim.update(T.ph+H0.t*T.sp);sim.draw();}catch(e){}g.restore();}}
+  layout();
+  if(reduce){frame(0);H0.alive=false;return;}
+  const ro=new ResizeObserver(()=>{if(H0.alive)layout();});ro.observe(cv);
+  H0.obs={disconnect(){ro.disconnect();io.disconnect();}};
+  const io=new IntersectionObserver(es=>{H0.vis=es[0].isIntersecting;});io.observe(cv);
+  function loop(ts){if(!H0.alive||hero!==H0)return;
+    if(H0.vis&&!document.hidden&&ts-(H0.drawn||0)>=31){const dt=H0.drawn?Math.min(0.1,(ts-H0.drawn)/1000):0;H0.t+=dt;H0.drawn=ts;frame();}
+    requestAnimationFrame(loop);}
+  requestAnimationFrame(loop);}
 
 /* ---------- detail bench ---------- */
 let bench=null,cadH=null,cadObs=null;
-function stopBench(){if(bench){bench.alive=false;bench=null;}if(cadObs){cadObs.disconnect();cadObs=null;}if(cadH){cadH.destroy();cadH=null;}}
+function stopBench(){stopHero();if(bench){bench.alive=false;bench=null;}if(cadObs){cadObs.disconnect();cadObs=null;}if(cadH){cadH.destroy();cadH=null;}}
 const hasCad=n=>!!(window.CAD&&window.CAD.has(n));
 function detail(n){stopBench();const m=MV[n-1];if(!m){location.hash='';return;}const sim=SIMS[n];
   const prev=n>1?n-1:null,next=n<507?n+1:null;
